@@ -1,0 +1,45 @@
+"""Shared dependencies — singletons for the app lifecycle."""
+
+import logging
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
+from ontology.registry import OntologyRegistry
+from store.base import BaseStore
+
+logger = logging.getLogger(__name__)
+
+
+def _build_store() -> BaseStore:
+    """Create the store backend based on environment configuration."""
+    neo4j_uri = os.environ.get("NEO4J_URI")
+
+    if neo4j_uri:
+        from store.neo4j_store import Neo4jStore
+
+        user = os.environ.get("NEO4J_USER", "neo4j")
+        password = os.environ.get("NEO4J_PASSWORD", "openmaven")
+        logger.info("Using Neo4j store at %s", neo4j_uri)
+        return Neo4jStore(uri=neo4j_uri, user=user, password=password)
+
+    from store.memory import MemoryStore
+
+    logger.info("Using in-memory store")
+    return MemoryStore()
+
+
+store = _build_store()
+registry = OntologyRegistry()
+
+
+def _build_graphiti():
+    """Create the Graphiti client if API keys are configured."""
+    from kg.client import get_graphiti
+
+    return get_graphiti()
+
+
+graphiti = _build_graphiti()
