@@ -36,7 +36,7 @@ Inspired by Palantir Gotham. Built for analysts, researchers, and anyone working
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/<your-org>/OpenMaven.git
+git clone https://github.com/bobcoi03/OpenMaven.git
 cd OpenMaven
 
 # Frontend
