@@ -58,64 +58,29 @@ export function GraphViewInner({
 }: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<ForceGraphMethods<GraphNode, GraphLink>>(undefined);
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingClickNodeRef = useRef<string | null>(null);
   const pulseRef = useRef(0);
 
-  // Keep a stable map of node objects so we preserve x/y positions across updates
-  const nodeMapRef = useRef<Map<string, GraphNode>>(new Map());
-  const prevNodeCountRef = useRef(0);
-
-  const rawNodes = nodesProp ?? [];
-  const rawEdges = edgesProp ?? [];
-
   const graphData = useMemo(() => {
-    const nodeMap = nodeMapRef.current;
+    const rawNodes = nodesProp ?? [];
+    const rawEdges = edgesProp ?? [];
     const nodeIds = new Set(rawNodes.map((n) => n.id));
 
-    // Remove nodes that are no longer in the data
-    for (const id of nodeMap.keys()) {
-      if (!nodeIds.has(id)) nodeMap.delete(id);
-    }
+    const nodes: GraphNode[] = rawNodes.map((n) => ({
+      id: n.id,
+      label: n.label,
+      type: n.type,
+      color: TYPE_COLORS[n.type?.toLowerCase()] ?? n.color ?? "#a1a1aa",
+    }));
 
-    // Add or update nodes, preserving existing x/y/fx/fy
-    for (const n of rawNodes) {
-      const existing = nodeMap.get(n.id);
-      if (existing) {
-        // Update labels/colors but keep position
-        existing.label = n.label;
-        existing.type = n.type;
-        existing.color = TYPE_COLORS[n.type?.toLowerCase()] ?? n.color ?? "#a1a1aa";
-      } else {
-        nodeMap.set(n.id, {
-          id: n.id,
-          label: n.label,
-          type: n.type,
-          color: TYPE_COLORS[n.type?.toLowerCase()] ?? n.color ?? "#a1a1aa",
-        });
-      }
-    }
-
-    const nodes = Array.from(nodeMap.values());
     const links: GraphLink[] = rawEdges
       .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
       .map((e) => ({ source: e.source, target: e.target }));
 
     return { nodes, links };
-  }, [rawNodes, rawEdges]);
+  }, [nodesProp, edgesProp]);
 
   // Resize handler
-  const [dimensions, setDimensions] = useDimensions(containerRef);
-
-  // Gently reheat (not reset) when new nodes are added
-  useEffect(() => {
-    const currentCount = graphData.nodes.length;
-    if (currentCount > prevNodeCountRef.current && prevNodeCountRef.current > 0) {
-      // New nodes added — gentle reheat to settle them in
-      fgRef.current?.d3ReheatSimulation();
-    }
-    prevNodeCountRef.current = currentCount;
-  }, [graphData]);
+  const [dimensions] = useDimensions(containerRef);
 
   // Zoom to fit only on first meaningful data
   const hasZoomedRef = useRef(false);
@@ -144,21 +109,17 @@ export function GraphViewInner({
 
   const handleNodeClick = useCallback(
     (node: GraphNode) => {
-      if (clickTimerRef.current && pendingClickNodeRef.current === node.id) {
-        clearTimeout(clickTimerRef.current);
-        clickTimerRef.current = null;
-        pendingClickNodeRef.current = null;
-        onNodeExpand?.(node.id);
-      } else {
-        pendingClickNodeRef.current = node.id;
-        clickTimerRef.current = setTimeout(() => {
-          clickTimerRef.current = null;
-          pendingClickNodeRef.current = null;
-          onNodeClick?.(node.id);
-        }, 300);
-      }
+      onNodeClick?.(node.id);
     },
-    [onNodeClick, onNodeExpand],
+    [onNodeClick],
+  );
+
+  const handleNodeRightClick = useCallback(
+    (node: GraphNode, event: MouseEvent) => {
+      event.preventDefault();
+      onNodeExpand?.(node.id);
+    },
+    [onNodeExpand],
   );
 
   const drawNode = useCallback(
@@ -240,20 +201,13 @@ export function GraphViewInner({
             ctx.fill();
           }}
           onNodeClick={handleNodeClick}
-          onNodeDragEnd={(node: GraphNode) => {
-            node.fx = node.x;
-            node.fy = node.y;
-          }}
-          onNodeRightClick={(node: GraphNode) => {
-            node.fx = undefined;
-            node.fy = undefined;
-          }}
+          onNodeRightClick={handleNodeRightClick}
           linkColor={() => "#27272a"}
           linkWidth={0.5}
           d3AlphaDecay={0.03}
           d3VelocityDecay={0.3}
           cooldownTicks={200}
-          enableNodeDrag={true}
+          enableNodeDrag={false}
         />
       )}
     </div>

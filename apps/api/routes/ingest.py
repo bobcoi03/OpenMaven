@@ -1,8 +1,8 @@
 """Ingestion API — upload files, fetch URLs, detect schemas.
 
 Pipeline priority:
-1. neo4j-graphrag SimpleKGPipeline (if ANTHROPIC_API_KEY + NEO4J_URI set)
-2. Graphiti (if ANTHROPIC_API_KEY + OPENAI_API_KEY + NEO4J_URI set)
+1. neo4j-graphrag SimpleKGPipeline (if OPENAI_API_KEY + NEO4J_URI set)
+2. Graphiti (if OPENAI_API_KEY + NEO4J_URI set)
 3. Flat CSV/document pipeline (always available)
 """
 

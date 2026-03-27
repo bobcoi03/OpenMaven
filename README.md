@@ -22,7 +22,7 @@ Inspired by Palantir Gotham. Built for analysts, researchers, and anyone working
 | Maps | MapLibre GL JS |
 | Backend | FastAPI, Python 3.11 |
 | Graph DB | Neo4j 5 (Docker) |
-| KG Extraction | neo4j-graphrag (SimpleKGPipeline) with Anthropic + OpenAI |
+| KG Extraction | neo4j-graphrag (SimpleKGPipeline) with OpenAI (gpt-4o-mini) |
 | Package Mgr | pnpm (JS) + uv (Python) |
 
 ## Prerequisites
@@ -72,7 +72,6 @@ NEO4J_USER=neo4j
 NEO4J_PASSWORD=openmaven
 
 # Optional: enable AI-powered KG extraction and querying
-ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
 # Optional: load YC demo data on startup
@@ -81,7 +80,7 @@ OPENAI_API_KEY=sk-...
 
 **Without API keys:** Ingestion uses the flat CSV/document pipeline (schema detection + direct import). No LLM costs.
 
-**With API keys:** Ingestion uses neo4j-graphrag SimpleKGPipeline for entity extraction. AI query endpoint becomes functional. Uses Claude Haiku (cheap).
+**With OPENAI_API_KEY:** Ingestion uses neo4j-graphrag SimpleKGPipeline for entity extraction. AI query endpoint becomes functional. Uses gpt-4o-mini (cheap).
 
 ### 4. Start the API
 
@@ -129,8 +128,8 @@ Open http://localhost:3000.
 
 ## Ingestion Pipeline Priority
 
-1. **neo4j-graphrag** — LLM-powered KG extraction (if ANTHROPIC_API_KEY + OPENAI_API_KEY + NEO4J_URI set)
-2. **Graphiti** — Temporal KG construction (if API keys set, fallback)
+1. **neo4j-graphrag** — LLM-powered KG extraction (if OPENAI_API_KEY + NEO4J_URI set)
+2. **Graphiti** — Temporal KG construction (fallback)
 3. **Flat pipeline** — Schema detection + direct import (always available, no LLM cost)
 
 ## License

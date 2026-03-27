@@ -1,7 +1,7 @@
 """Knowledge graph extraction via neo4j-graphrag SimpleKGPipeline.
 
 Replaces the Graphiti-based extraction with Neo4j's official GraphRAG package.
-Uses Anthropic Haiku for LLM (cheap) and OpenAI text-embedding-3-small for embeddings.
+Uses OpenAI gpt-4o-mini for LLM (cheap) and text-embedding-3-small for embeddings.
 """
 
 import json
@@ -23,8 +23,7 @@ _INGEST_NS = uuid.UUID("d4e7f8a9-1b2c-3d4e-5f6a-7b8c9d0e1f2a")
 def _is_configured() -> bool:
     """Check if required env vars are set for the neo4j-graphrag pipeline."""
     return bool(
-        os.environ.get("ANTHROPIC_API_KEY")
-        and os.environ.get("OPENAI_API_KEY")
+        os.environ.get("OPENAI_API_KEY")
         and os.environ.get("NEO4J_URI")
     )
 
@@ -35,13 +34,12 @@ def _build_pipeline(
 ):
     """Build a SimpleKGPipeline from environment config + ontology registry."""
     from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
-    from neo4j_graphrag.llm import AnthropicLLM
+    from neo4j_graphrag.llm import OpenAILLM
 
-    api_key = os.environ["ANTHROPIC_API_KEY"]
-    llm = AnthropicLLM(
-        model_name="claude-haiku-4-5-20241022",
+    llm = OpenAILLM(
+        model_name="gpt-5.4-mini",
         model_params={"max_tokens": 2048},
-        api_key=api_key,
+        api_key=os.environ["OPENAI_API_KEY"],
     )
 
     # Build schema from ontology registry

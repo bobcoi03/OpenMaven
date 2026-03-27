@@ -46,7 +46,7 @@ export default function GraphPage() {
                   Search to begin investigating
                 </p>
                 <p className="text-[11px] text-zinc-600 mt-1">
-                  Use the search bar above to find entities, then explore connections
+                  Use the search bar above to find entities. Click to inspect, right-click to expand.
                 </p>
               </div>
             </div>

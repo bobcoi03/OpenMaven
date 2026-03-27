@@ -23,16 +23,11 @@ def get_graphiti():
 
 def _try_build_client():
     """Attempt to build a Graphiti client from environment variables."""
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     openai_key = os.environ.get("OPENAI_API_KEY")
     neo4j_uri = os.environ.get("NEO4J_URI")
 
-    if not anthropic_key:
-        logger.info("ANTHROPIC_API_KEY not set — Graphiti KG extraction disabled")
-        return None
-
     if not openai_key:
-        logger.info("OPENAI_API_KEY not set — Graphiti KG extraction disabled (needed for embeddings)")
+        logger.info("OPENAI_API_KEY not set — Graphiti KG extraction disabled")
         return None
 
     if not neo4j_uri:
@@ -41,15 +36,15 @@ def _try_build_client():
 
     try:
         from graphiti_core import Graphiti
-        from graphiti_core.llm_client.anthropic_client import AnthropicClient
+        from graphiti_core.llm_client.openai_client import OpenAIClient
         from graphiti_core.llm_client.config import LLMConfig
         from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 
-        llm_client = AnthropicClient(
+        llm_client = OpenAIClient(
             config=LLMConfig(
-                api_key=anthropic_key,
-                model="claude-haiku-4-5-20241022",
-                small_model="claude-haiku-4-5-20241022",
+                api_key=openai_key,
+                model="gpt-5.4-mini",
+                small_model="gpt-5.4-mini",
                 temperature=1.0,
             )
         )

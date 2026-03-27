@@ -2,12 +2,14 @@
 
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from neo4j import GraphDatabase, Driver
+from neo4j.exceptions import ServiceUnavailable
 
 from ontology.types import LinkInstance, ObjectInstance
 from store.base import BaseStore
@@ -30,7 +32,7 @@ class Neo4jStore(BaseStore):
 
     def __init__(self, uri: str, user: str, password: str) -> None:
         self._driver: Driver = GraphDatabase.driver(uri, auth=(user, password))
-        self._ensure_indexes()
+        self._ensure_indexes_with_retry()
 
     def close(self) -> None:
         self._driver.close()
@@ -38,15 +40,34 @@ class Neo4jStore(BaseStore):
     def _ensure_indexes(self) -> None:
         """Create indexes for fast lookups on first connection."""
         with self._driver.session() as session:
-            session.run(
-                "CREATE INDEX IF NOT EXISTS FOR (n:Object) ON (n.rid)"
-            )
-            session.run(
-                "CREATE INDEX IF NOT EXISTS FOR (n:Source) ON (n.source_id)"
-            )
-            session.run(
-                "CREATE INDEX IF NOT EXISTS FOR (n:Object) ON (n.source_id)"
-            )
+            session.run("CREATE INDEX IF NOT EXISTS FOR (n:Object) ON (n.rid)")
+            session.run("CREATE INDEX IF NOT EXISTS FOR (n:Source) ON (n.source_id)")
+            session.run("CREATE INDEX IF NOT EXISTS FOR (n:Object) ON (n.source_id)")
+
+    def _ensure_indexes_with_retry(self) -> None:
+        """
+        Ensure indexes, tolerating Neo4j startup warmup.
+
+        When `uvicorn` boots immediately after `docker compose up -d`, Neo4j may
+        accept TCP connections but still reset Bolt handshakes or reject queries.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(1, 11):
+            try:
+                self._ensure_indexes()
+                return
+            except ServiceUnavailable as exc:
+                last_exc = exc
+                sleep_s = min(0.25 * (2 ** (attempt - 1)), 5.0)
+                logger.warning(
+                    "Neo4j not ready yet (attempt %d/10); retrying in %.2fs",
+                    attempt,
+                    sleep_s,
+                )
+                time.sleep(sleep_s)
+
+        if last_exc is not None:
+            raise last_exc
 
     # ── Load ────────────────────────────────────────────────────────────────
 

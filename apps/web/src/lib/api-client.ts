@@ -171,3 +171,61 @@ export async function queryKnowledgeGraph(question: string): Promise<QueryResult
   }
   return response.json();
 }
+
+export type QueryStreamEvent =
+  | { type: "status"; message: string; step?: number }
+  | { type: "tool_call"; name: string; args: Record<string, unknown>; step: number }
+  | { type: "tool_result"; name: string; ok: boolean; preview: string; step: number }
+  | { type: "final"; answer: string; sources: Array<{ rid: string; name: string; type: string }> }
+  | { type: "error"; message: string };
+
+export type QueryChatMessage = { role: "user" | "assistant"; content: string };
+
+export async function queryKnowledgeGraphStream(
+  question: string,
+  messages: QueryChatMessage[],
+  onEvent: (event: QueryStreamEvent) => void,
+): Promise<void> {
+  const response = await fetch("/api/query/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, messages }),
+  });
+  if (!response.ok || !response.body) {
+    const detail = await response.text();
+    throw new ApiError(response.status, detail || "Failed to stream query");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let splitIdx = buffer.indexOf("\n\n");
+    while (splitIdx !== -1) {
+      const rawEvent = buffer.slice(0, splitIdx);
+      buffer = buffer.slice(splitIdx + 2);
+
+      const dataLines = rawEvent
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim());
+
+      if (dataLines.length > 0) {
+        const rawData = dataLines.join("\n");
+        try {
+          const parsed = JSON.parse(rawData) as QueryStreamEvent;
+          onEvent(parsed);
+        } catch {
+          onEvent({ type: "error", message: "Failed to parse query stream event." });
+        }
+      }
+
+      splitIdx = buffer.indexOf("\n\n");
+    }
+  }
+}
