@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppData } from "@/lib/data-context";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { searchObjects, queryKnowledgeGraph } from "@/lib/api-client";
+import ReactMarkdown from "react-markdown";
+import { searchObjects, queryKnowledgeGraphStream, type QueryChatMessage, type QueryStreamEvent } from "@/lib/api-client";
 import type { ObjectInstance } from "@/lib/api-types";
 import {
   Search,
@@ -46,6 +47,11 @@ interface ChatMessage {
   sources?: Array<{ rid: string; name: string; type: string }>;
 }
 
+interface QueryProgressItem {
+  id: string;
+  label: string;
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { entityCounts, graph } = useAppData();
   const pathname = usePathname();
@@ -64,6 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [queryText, setQueryText] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isQuerying, setIsQuerying] = useState(false);
+  const [queryProgress, setQueryProgress] = useState<QueryProgressItem[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll messages
@@ -140,25 +147,65 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (!question || isQuerying) return;
 
     setQueryText("");
-    setMessages((prev) => [...prev, { role: "user", content: question }]);
+    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: question }];
+    const nextChatForApi: QueryChatMessage[] = nextMessages.map((m) => ({ role: m.role, content: m.content }));
+    setMessages(nextMessages);
     setIsQuerying(true);
+    setQueryProgress([{ id: "start", label: "Analyzing your question..." }]);
 
     try {
-      const result = await queryKnowledgeGraph(question);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: result.answer,
-          sources: result.sources,
-        },
-      ]);
+      await queryKnowledgeGraphStream(question, nextChatForApi, (event: QueryStreamEvent) => {
+        if (event.type === "status") {
+          setQueryProgress((prev) => [...prev, { id: crypto.randomUUID(), label: event.message }]);
+          return;
+        }
+        if (event.type === "tool_call") {
+          setQueryProgress((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), label: `Calling ${event.name}...` },
+          ]);
+          return;
+        }
+        if (event.type === "tool_result") {
+          setQueryProgress((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              label: event.ok
+                ? `${event.name} returned data`
+                : `${event.name} returned an error`,
+            },
+          ]);
+          return;
+        }
+        if (event.type === "final") {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: event.answer,
+              sources: event.sources,
+            },
+          ]);
+          setQueryProgress((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), label: "Answer ready." },
+          ]);
+          return;
+        }
+        if (event.type === "error") {
+          setQueryProgress((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), label: `Error: ${event.message}` },
+          ]);
+        }
+      });
     } catch {
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "Sorry, I couldn't process that query. Make sure the API is running and ANTHROPIC_API_KEY is configured.",
+          content: "Sorry, I couldn't process that query. Make sure the API is running and OPENAI_API_KEY is configured.",
         },
       ]);
     } finally {
@@ -326,9 +373,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] text-zinc-300 leading-[1.6] whitespace-pre-wrap">
-                      {msg.content}
-                    </p>
+                    <div className="text-[11px] text-zinc-300 leading-[1.6] break-words">
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
+                          li: ({ children }) => <li className="mb-1">{children}</li>,
+                          code: ({ children }) => (
+                            <code className="px-1 py-0.5 rounded bg-zinc-800/80 text-zinc-200">
+                              {children}
+                            </code>
+                          ),
+                          a: ({ href, children }) => (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="text-cyan-400 hover:text-cyan-300 underline"
+                            >
+                              {children}
+                            </a>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {msg.sources.map((s) => {
@@ -356,7 +427,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {isQuerying && (
               <div className="flex gap-2">
                 <Bot size={12} className="text-cyan-500 shrink-0 mt-0.5" />
-                <Loader2 size={12} className="animate-spin text-zinc-500" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Loader2 size={12} className="animate-spin text-zinc-500" />
+                    <span className="text-[10px] text-zinc-500">Working...</span>
+                  </div>
+                  {queryProgress.length > 0 && (
+                    <div className="space-y-1">
+                      {queryProgress.slice(-4).map((item) => (
+                        <p key={item.id} className="text-[10px] text-zinc-500 leading-[1.4]">
+                          {item.label}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             <div ref={messagesEndRef} />
