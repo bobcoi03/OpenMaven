@@ -214,7 +214,7 @@ class SimulationManager:
             diff = self._advance_tick()
 
             if self._broadcast_fn is not None:
-                await self._broadcast_fn(diff)
+                await self._broadcast_fn({"type": "diff", "data": diff.model_dump()})
 
     def _advance_tick(self) -> StateDiff:
         """Process one simulation tick."""

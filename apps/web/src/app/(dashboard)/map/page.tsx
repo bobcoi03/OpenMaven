@@ -21,9 +21,11 @@
 
 import { useState, useMemo } from "react";
 import { MapView } from "@/components/map-view";
+import { SimulationControls } from "@/components/simulation-controls";
 import { useMapLayers } from "@/lib/map-layer-context";
+import { useSimulation } from "@/lib/use-simulation";
+import { simAssetsToTactical } from "@/lib/sim-to-tactical";
 import {
-  MOCK_TACTICAL_ASSETS,
   MOCK_TARGETING_ALERTS,
   type TacticalAsset,
   type TargetingAlert,
@@ -355,11 +357,17 @@ export default function MapPage() {
   const [selectedAsset, setSelectedAsset] = useState<TacticalAsset | null>(null);
   const [boardOpen, setBoardOpen] = useState(true);
 
-  // Filter assets by visible layers — also cap for performance; real data
-  // would come from the Kafka-backed /api/assets/tactical endpoint.
+  const sim = useSimulation();
+
+  // Convert live simulation assets to the TacticalAsset format the map expects
+  const tacticalAssets = useMemo(
+    () => simAssetsToTactical(sim.assets),
+    [sim.assets],
+  );
+
   const visibleAssets = useMemo(
-    () => MOCK_TACTICAL_ASSETS.filter((a) => visibleLayers.has(a.asset_class)),
-    [visibleLayers],
+    () => tacticalAssets.filter((a) => visibleLayers.has(a.asset_class)),
+    [tacticalAssets, visibleLayers],
   );
 
   const alertCount = MOCK_TARGETING_ALERTS.filter(
@@ -368,6 +376,16 @@ export default function MapPage() {
 
   return (
     <div className="flex-1 flex flex-col bg-[#09090b] overflow-hidden">
+      {/* ── Simulation Controls ─────────────────────────────────────── */}
+      <SimulationControls
+        connected={sim.connected}
+        tick={sim.tick}
+        speed={sim.speed}
+        onSetSpeed={sim.setSpeed}
+        assetCount={Object.keys(sim.assets).length}
+        pendingEvents={sim.pendingEvents}
+      />
+
       {/* ── Map ──────────────────────────────────────────────────────── */}
       <div className="flex-1 relative min-h-0">
         <MapView
