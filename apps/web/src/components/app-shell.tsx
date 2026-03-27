@@ -26,6 +26,7 @@ import {
   Bot,
   Layers,
   ChevronRight,
+  Crosshair,
 } from "lucide-react";
 
 const TABS = [
@@ -34,6 +35,7 @@ const TABS = [
   { name: "Map", href: "/map", icon: MapIcon },
   { name: "Query", href: "/query", icon: MessageSquare },
   { name: "Sources", href: "/sources", icon: FileText },
+  { name: "Assets", href: "/assets", icon: Crosshair },
   { name: "Decisions", href: "/decisions", icon: SlidersHorizontal },
 ] as const;
 
