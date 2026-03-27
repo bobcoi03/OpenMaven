@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppData } from "@/lib/data-context";
+import { useMapLayers } from "@/lib/map-layer-context";
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { searchObjects, queryKnowledgeGraphStream, type QueryChatMessage, type QueryStreamEvent } from "@/lib/api-client";
 import type { ObjectInstance } from "@/lib/api-types";
+import { MOCK_TACTICAL_ASSETS, MOCK_TARGETING_ALERTS, type AssetClass } from "@/lib/tactical-mock";
 import {
   Search,
   Filter,
@@ -22,6 +24,8 @@ import {
   Loader2,
   User,
   Bot,
+  Layers,
+  ChevronRight,
 } from "lucide-react";
 
 const TABS = [
@@ -52,8 +56,24 @@ interface QueryProgressItem {
   label: string;
 }
 
+// ── Layer config for the tactical sidebar ─────────────────────────────────────
+
+const LAYER_CFG: {
+  id: AssetClass;
+  color: string;
+  bg: string;
+  description: string;
+}[] = [
+  { id: "Military",       color: "#00d4ff", bg: "rgba(0,212,255,0.08)",  description: "Armour · Air · Infantry" },
+  { id: "Infrastructure", color: "#f59e0b", bg: "rgba(245,158,11,0.08)", description: "Oil · Power · Bridges"  },
+  { id: "Logistics",      color: "#94a3b8", bg: "rgba(148,163,184,0.08)",description: "Supply · Air Transport"  },
+];
+
+// ── AppShell ──────────────────────────────────────────────────────────────────
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { entityCounts, graph } = useAppData();
+  const { visibleLayers, toggleLayer } = useMapLayers();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -216,23 +236,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-full flex flex-col bg-[#09090b] text-zinc-200">
       {/* ── Top Bar ─────────────────────────────────────────────────── */}
-      <header className="h-10 flex items-center justify-between px-3 bg-[#141417] border-b border-zinc-800/80 shrink-0 z-20">
+      <header className="h-10 flex items-center justify-between px-3 bg-[#141417] border-b border-[#27272a] shrink-0 z-20">
         <div className="flex items-center gap-3">
-          <span className="text-[11px] font-semibold text-zinc-100 tracking-[0.15em] uppercase">
-            OpenMaven
-          </span>
-          <div className="w-px h-4 bg-zinc-800" />
+          {/* Tactical classification badge */}
+          <div className="flex items-center gap-1.5">
+            <span
+              className="text-[9px] font-bold px-1.5 py-px rounded"
+              style={{ background: "#ef4444", color: "#fff", letterSpacing: "0.05em" }}
+            >
+              TS
+            </span>
+            <span className="text-[11px] font-semibold text-zinc-100 tracking-[0.18em] uppercase">
+              OpenMaven
+            </span>
+          </div>
+          <div className="w-px h-4 bg-[#27272a]" />
           <nav className="flex gap-0.5">
             {TABS.map(({ name, href, icon: Icon }) => {
               const active = pathname === href;
+              const isTactical = href === "/map";
               return (
                 <Link
                   key={name}
                   href={href}
                   className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded font-medium tracking-wide transition-colors ${
-                    active
-                      ? "bg-white/10 text-zinc-100"
-                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                    active && isTactical
+                      ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/25"
+                      : active
+                      ? "bg-white/8 text-zinc-100 border border-white/10"
+                      : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5 border border-transparent"
                   }`}
                 >
                   <Icon size={12} />
@@ -257,7 +289,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onFocus={() => {
                 if (searchResults.length > 0) setShowResults(true);
               }}
-              className="pl-7 pr-3 py-1 text-[11px] rounded bg-zinc-900/80 border border-zinc-800/80 text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 w-56"
+              className="pl-7 pr-3 py-1 text-[11px] rounded bg-[#141417]/80 border border-zinc-800/80 text-zinc-300 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 w-56"
             />
             {/* Search dropdown */}
             {showResults && (
@@ -307,40 +339,123 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Main Content ────────────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Sidebar — Entity Types */}
-        <aside className="w-[280px] bg-[#141417] border-r border-zinc-800/80 flex flex-col shrink-0 z-10 overflow-y-auto">
-          <div className="px-3 py-2.5 border-b border-zinc-800/60">
-            <div className="flex items-center gap-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
-              <Filter size={11} />
-              Entity Types
-            </div>
-          </div>
+        {/* Left Sidebar — Map Layers (on /map) or Entity Types (other pages) */}
+        <aside className="w-[240px] bg-[#141417] border-r border-[#27272a] flex flex-col shrink-0 z-10 overflow-y-auto">
+          {pathname === "/map" ? (
+            /* ── Tactical Map Layers ───────────────────────────────── */
+            <>
+              <div className="px-3 py-2.5 border-b border-[#27272a]">
+                <div className="flex items-center gap-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
+                  <Layers size={11} />
+                  Map Layers
+                </div>
+              </div>
 
-          {entityCounts.length === 0 ? (
-            <div className="px-3 py-6 text-center">
-              <p className="text-[11px] text-zinc-500">No data yet</p>
-              <p className="text-[10px] text-zinc-600 mt-1">Upload files in the Sources tab</p>
-            </div>
-          ) : (
-            <div className="px-3 py-2 space-y-1.5">
-              {entityCounts.map(({ type, count, color }) => {
-                const maxCount = entityCounts[0]?.count || 1;
-                const pct = (count / maxCount) * 100;
-                return (
-                  <div key={type} className="flex items-center gap-2 group">
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-                    <span className="text-[11px] text-zinc-300 w-[100px] truncate">{type}</span>
-                    <div className="flex-1 h-2.5 bg-zinc-900/80 rounded overflow-hidden">
+              {/* Layer toggles */}
+              <div className="px-2 py-2 space-y-1">
+                {LAYER_CFG.map(({ id, color, bg, description }) => {
+                  const isOn = visibleLayers.has(id);
+                  const count = MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === id).length;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => toggleLayer(id)}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded transition-all cursor-pointer group"
+                      style={{
+                        background: isOn ? bg : "transparent",
+                        border: `1px solid ${isOn ? color + "30" : "#27272a"}`,
+                        opacity: isOn ? 1 : 0.45,
+                      }}
+                    >
+                      {/* Toggle indicator */}
                       <div
-                        className="h-full rounded"
-                        style={{ width: `${Math.min(pct, 100)}%`, background: color, opacity: 0.5 }}
-                      />
+                        className="w-3 h-3 rounded-sm shrink-0 flex items-center justify-center transition-all"
+                        style={{
+                          background: isOn ? color : "transparent",
+                          border: `1.5px solid ${color}`,
+                        }}
+                      >
+                        {isOn && (
+                          <svg width="7" height="5" viewBox="0 0 7 5" fill="none">
+                            <polyline points="1,2.5 3,4.5 6,1" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </div>
+
+                      <div className="flex-1 text-left min-w-0">
+                        <div className="text-[11px] font-semibold truncate" style={{ color: isOn ? color : "#64748b" }}>
+                          {id}
+                        </div>
+                        <div className="text-[9px] text-zinc-600">{description}</div>
+                      </div>
+
+                      <span
+                        className="text-[10px] font-mono shrink-0"
+                        style={{ color: isOn ? color + "bb" : "#334155" }}
+                      >
+                        {count.toLocaleString()}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Theatre info */}
+              <div className="mt-auto px-3 py-3 border-t border-[#27272a]">
+                <div className="text-[9px] text-zinc-600 uppercase tracking-[0.1em] mb-2">
+                  Theatre of Operations
+                </div>
+                <div className="space-y-1">
+                  {[
+                    ["Area",   "E. Syria / W. Iraq"],
+                    ["Assets", MOCK_TACTICAL_ASSETS.length.toLocaleString()],
+                    ["Lat",    "29°N – 37°N"],
+                    ["Lon",    "38°E – 48°E"],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex items-baseline justify-between">
+                      <span className="text-[9px] text-zinc-700 uppercase tracking-[0.08em]">{k}</span>
+                      <span className="text-[9px] text-zinc-500 font-mono">{v}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 w-8 text-right font-[family-name:var(--font-mono)]">{count}</span>
-                  </div>
-                );
-              })}
-            </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            /* ── Entity Types (all other pages) ───────────────────── */
+            <>
+              <div className="px-3 py-2.5 border-b border-zinc-800/60">
+                <div className="flex items-center gap-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
+                  <Filter size={11} />
+                  Entity Types
+                </div>
+              </div>
+              {entityCounts.length === 0 ? (
+                <div className="px-3 py-6 text-center">
+                  <p className="text-[11px] text-zinc-500">No data yet</p>
+                  <p className="text-[10px] text-zinc-600 mt-1">Upload files in the Sources tab</p>
+                </div>
+              ) : (
+                <div className="px-3 py-2 space-y-1.5">
+                  {entityCounts.map(({ type, count, color }) => {
+                    const maxCount = entityCounts[0]?.count || 1;
+                    const pct = (count / maxCount) * 100;
+                    return (
+                      <div key={type} className="flex items-center gap-2 group">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                        <span className="text-[11px] text-zinc-300 w-[80px] truncate">{type}</span>
+                        <div className="flex-1 h-2.5 bg-zinc-900/80 rounded overflow-hidden">
+                          <div
+                            className="h-full rounded"
+                            style={{ width: `${Math.min(pct, 100)}%`, background: color, opacity: 0.5 }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-zinc-500 w-8 text-right font-[family-name:var(--font-mono)]">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </aside>
 
@@ -350,7 +465,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Right Panel — AI Query */}
-        <aside className="w-[320px] bg-[#141417] border-l border-zinc-800/80 flex flex-col shrink-0 z-10">
+        <aside className="w-[300px] bg-[#141417] border-l border-[#27272a] flex flex-col shrink-0 z-10">
           <div className="flex items-center gap-2 px-3 py-2.5 border-b border-zinc-800/60">
             <Sparkles size={13} className="text-zinc-400" />
             <span className="text-[11px] font-semibold text-zinc-300 tracking-wide">Query</span>
@@ -473,15 +588,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* ── Bottom Status Bar ───────────────────────────────────────── */}
-      <footer className="h-7 flex items-center gap-4 px-3 bg-[#141417] border-t border-zinc-800/80 shrink-0 z-20 overflow-hidden">
-        {entityCounts.map(({ type, count, color }) => (
-          <div key={type} className="flex items-center gap-1.5 text-[10px] text-zinc-400 shrink-0 max-w-[180px]">
-            <Circle size={8} fill={color} stroke="none" className="shrink-0" />
-            <span className="font-semibold font-[family-name:var(--font-mono)]" style={{ color }}>{count}</span>
-            <span className="truncate">{type}</span>
-          </div>
-        ))}
-        <div className="ml-auto text-[10px] text-zinc-600 font-[family-name:var(--font-mono)] shrink-0">
+      <footer className="h-7 flex items-center gap-4 px-3 bg-[#141417] border-t border-[#27272a] shrink-0 z-20 overflow-hidden">
+        {pathname === "/map" ? (
+          /* Tactical status line */
+          <>
+            {(["Military", "Infrastructure", "Logistics"] as const).map((cls) => {
+              const color =
+                cls === "Military" ? "#00d4ff" :
+                cls === "Infrastructure" ? "#f59e0b" : "#94a3b8";
+              const count = MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === cls).length;
+              return (
+                <div key={cls} className="flex items-center gap-1.5 text-[10px] shrink-0">
+                  <Circle size={7} fill={color} stroke="none" />
+                  <span className="font-semibold font-[family-name:var(--font-mono)]" style={{ color }}>{count}</span>
+                  <span className="text-zinc-500">{cls}</span>
+                </div>
+              );
+            })}
+            <div className="flex items-center gap-1 text-[10px] shrink-0">
+              <ChevronRight size={10} className="text-red-500" />
+              <span className="text-red-400 font-mono">
+                {MOCK_TARGETING_ALERTS.filter((a) => a.stage === "DYNAMIC").length} DYNAMIC
+              </span>
+            </div>
+          </>
+        ) : (
+          entityCounts.map(({ type, count, color }) => (
+            <div key={type} className="flex items-center gap-1.5 text-[10px] text-zinc-400 shrink-0 max-w-[180px]">
+              <Circle size={8} fill={color} stroke="none" className="shrink-0" />
+              <span className="font-semibold font-[family-name:var(--font-mono)]" style={{ color }}>{count}</span>
+              <span className="truncate">{type}</span>
+            </div>
+          ))
+        )}
+        <div className="ml-auto text-[10px] text-zinc-700 font-[family-name:var(--font-mono)] shrink-0">
           v0.1.0
         </div>
       </footer>

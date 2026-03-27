@@ -1,18 +1,23 @@
 "use client";
 
+/**
+ * map-view-inner.tsx
+ *
+ * Tactical MapLibre map component.  Renders battlefield assets from the
+ * Smart Maven simulation engine as class-coded markers on a satellite base
+ * layer.  Supports layer visibility toggling (Military / Infrastructure /
+ * Logistics) and displays a detail popup on hover.
+ *
+ * Must be loaded via next/dynamic with ssr:false — maplibre-gl is
+ * browser-only.
+ */
+
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import type { Company } from "@/lib/mock-data";
+import type { TacticalAsset, AssetClass } from "@/lib/tactical-mock";
 
-interface MapViewProps {
-  onMarkerClick?: (company: Company) => void;
-  selectedId?: string | null;
-  className?: string;
-  style?: "dark" | "satellite" | "positron";
-  companies?: Company[];
-}
+// ── Satellite base style ──────────────────────────────────────────────────────
 
-// Esri World Imagery — free raster tiles, no API key needed
 const satelliteStyle: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -37,114 +42,240 @@ const satelliteStyle: maplibregl.StyleSpecification = {
   ],
 };
 
-export function MapViewInner({ onMarkerClick, selectedId, className = "", style = "satellite", companies: companiesProp }: MapViewProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<maplibregl.Marker[]>([]);
+// ── Marker colour palette ─────────────────────────────────────────────────────
 
+const CLASS_COLORS: Record<AssetClass, string> = {
+  Military:       "#00d4ff",   // bright cyan  — friendly forces
+  Infrastructure: "#f59e0b",   // amber        — fixed installations
+  Logistics:      "#94a3b8",   // slate        — supply lines
+};
+
+const CLASS_BORDER: Record<AssetClass, string> = {
+  Military:       "#0891b2",
+  Infrastructure: "#b45309",
+  Logistics:      "#475569",
+};
+
+// ── SVG shapes per asset class ────────────────────────────────────────────────
+
+function markerSvg(asset: TacticalAsset): string {
+  const fill  = CLASS_COLORS[asset.asset_class];
+  const stroke = CLASS_BORDER[asset.asset_class];
+
+  // MIL-2525-inspired shapes (simplified)
+  switch (asset.asset_class) {
+    case "Military":
+      // Rotated square (diamond) — standard friendly ground unit symbol
+      if (asset.asset_type === "Jet") {
+        return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="8,1 15,8 8,15 1,8" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+          <line x1="8" y1="4" x2="8" y2="12" stroke="${stroke}" stroke-width="1"/>
+        </svg>`;
+      }
+      if (asset.asset_type === "Infantry") {
+        return `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1.5" y="1.5" width="9" height="9" rx="1" fill="${fill}99" stroke="${fill}" stroke-width="1.5"/>
+        </svg>`;
+      }
+      // Tank — solid diamond
+      return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="7,1 13,7 7,13 1,7" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+      </svg>`;
+
+    case "Infrastructure": {
+      // Square with inner cross — installation symbol
+      const isCritical =
+        asset.status === "CRITICAL" ||
+        (asset.efficiency_pct !== undefined && asset.efficiency_pct < 30) ||
+        (asset.structural_pct !== undefined && asset.structural_pct < 30);
+      const infill = isCritical ? "#ef4444" : fill;
+      return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="1" width="12" height="12" rx="1" fill="${infill}33" stroke="${infill}" stroke-width="1.5"/>
+        <line x1="7" y1="3" x2="7" y2="11" stroke="${infill}" stroke-width="1"/>
+        <line x1="3" y1="7" x2="11" y2="7" stroke="${infill}" stroke-width="1"/>
+      </svg>`;
+    }
+
+    case "Logistics":
+      // Small open circle — supply/logistics unit
+      return `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="6" cy="6" r="4.5" fill="${fill}44" stroke="${fill}" stroke-width="1.5"/>
+      </svg>`;
+
+    default:
+      return `<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="${fill}"/></svg>`;
+  }
+}
+
+// ── Popup HTML ────────────────────────────────────────────────────────────────
+
+function buildPopupHtml(asset: TacticalAsset): string {
+  const color = CLASS_COLORS[asset.asset_class];
+
+  const metricLine = (() => {
+    if (asset.speed_kmh !== undefined) {
+      return `<span style="color:#94a3b8">SPD</span> ${asset.speed_kmh} km/h &nbsp;
+              <span style="color:#94a3b8">HDG</span> ${asset.heading_deg ?? "—"}°`;
+    }
+    if (asset.efficiency_pct !== undefined) return `<span style="color:#94a3b8">EFF</span> ${asset.efficiency_pct.toFixed(1)}%`;
+    if (asset.output_mw      !== undefined) return `<span style="color:#94a3b8">OUT</span> ${asset.output_mw.toFixed(1)} MW`;
+    if (asset.structural_pct !== undefined) return `<span style="color:#94a3b8">STR</span> ${asset.structural_pct.toFixed(1)}%`;
+    return "";
+  })();
+
+  const statusBadge = asset.status
+    ? `<span style="padding:1px 5px;border-radius:2px;font-size:9px;font-weight:600;
+         background:${asset.status === "CRITICAL" ? "#ef4444" : asset.status === "DEGRADED" ? "#f59e0b" : "#10b981"}22;
+         color:${asset.status === "CRITICAL" ? "#ef4444" : asset.status === "DEGRADED" ? "#f59e0b" : "#10b981"}">
+        ${asset.status}
+       </span>`
+    : "";
+
+  return `
+    <div style="font-family:'Inter',system-ui,sans-serif;padding:4px 2px;min-width:160px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color}"></span>
+        <strong style="font-size:11px;color:#e2e8f0">${asset.asset_type}</strong>
+        ${statusBadge}
+      </div>
+      <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">
+        ${asset.asset_class}
+      </div>
+      <div style="font-size:10px;color:#94a3b8;font-family:monospace">${metricLine}</div>
+      <div style="font-size:9px;color:#475569;margin-top:3px;font-family:monospace">
+        ${asset.latitude.toFixed(4)}°N &nbsp; ${asset.longitude.toFixed(4)}°E
+      </div>
+    </div>
+  `;
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+interface TacticalMapProps {
+  assets: TacticalAsset[];
+  visibleLayers: Set<AssetClass>;
+  onAssetClick?: (asset: TacticalAsset) => void;
+  selectedId?: string | null;
+  className?: string;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export function MapViewInner({
+  assets,
+  visibleLayers,
+  onAssetClick,
+  selectedId,
+  className = "",
+}: TacticalMapProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef       = useRef<maplibregl.Map | null>(null);
+  const markersRef   = useRef<Map<string, { marker: maplibregl.Marker; asset: TacticalAsset }>>(new Map());
+
+  // ── Initialise map ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const tileStyle =
-      style === "satellite"
-        ? satelliteStyle
-        : style === "dark"
-        ? "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-        : "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
-
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: tileStyle,
-      center: [0, 25],
-      zoom: 1.8,
-      attributionControl: false,
+      style: satelliteStyle,
+      // Centre on the theatre: Eastern Syria / Western Iraq border
+      center: [43.0, 33.0],
+      zoom: 5.5,
+      attributionControl: true,
+      maxZoom: 16,
     });
 
     mapRef.current = map;
 
-    const companyList = companiesProp ?? [];
-
-    map.on("load", () => {
-      companyList.forEach((company) => {
-        // Outer container: MapLibre controls its `transform` for positioning.
-        // Never set `transform` on this element — it would destroy the translate.
-        const el = document.createElement("div");
-        el.className = "map-marker";
-        el.style.cssText = `
-          width: 16px; height: 16px;
-          display: flex; align-items: center; justify-content: center;
-          cursor: pointer;
-        `;
-
-        // Inner dot: all visual styling (scale, glow, color) goes here.
-        const dot = document.createElement("div");
-        dot.className = "map-marker-dot";
-        dot.style.cssText = `
-          width: 12px; height: 12px; border-radius: 50%;
-          background: ${company.status === "Active" ? "#06b6d4" : company.status === "Acquired" ? "#f59e0b" : "#6b7280"};
-          border: 2px solid rgba(255,255,255,0.9);
-          transition: transform 0.15s, box-shadow 0.15s;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.5);
-        `;
-        el.appendChild(dot);
-
-        el.addEventListener("mouseenter", () => {
-          dot.style.transform = "scale(1.5)";
-          dot.style.boxShadow = "0 0 8px rgba(6,182,212,0.6), 0 1px 4px rgba(0,0,0,0.5)";
-        });
-        el.addEventListener("mouseleave", () => {
-          dot.style.transform = "scale(1)";
-          dot.style.boxShadow = "0 1px 4px rgba(0,0,0,0.5)";
-        });
-
-        const popup = new maplibregl.Popup({
-          offset: 12,
-          closeButton: false,
-          className: "map-popup",
-        }).setHTML(`
-          <div style="font-family: 'Inter', system-ui, sans-serif; font-size: 11px; padding: 4px 2px; background: #141417; color: #e4e4e7; border-radius: 4px;">
-            <strong style="font-size: 12px;">${company.name}</strong><br/>
-            <span style="color: #71717a; font-size: 10px;">${company.batch} · ${company.industry}</span><br/>
-            <span style="color: #71717a; font-size: 10px;">${company.location}</span>
-          </div>
-        `);
-
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([company.lng, company.lat])
-          .setPopup(popup)
-          .addTo(map);
-
-        el.addEventListener("click", () => {
-          onMarkerClick?.(company);
-        });
-
-        markersRef.current.push(marker);
-      });
-    });
-
     return () => {
       map.remove();
       mapRef.current = null;
-      markersRef.current = [];
+      markersRef.current.clear();
     };
+    // Intentionally run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Highlight selected marker — apply visual effects to the inner dot,
-  // never to the outer element whose `transform` is managed by MapLibre.
+  // ── Sync markers when assets or visibleLayers change ───────────────────────
   useEffect(() => {
-    markersRef.current.forEach((marker, i) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    function renderMarkers() {
+      if (!map) return;
+
+      // Remove all existing markers
+      markersRef.current.forEach(({ marker }) => marker.remove());
+      markersRef.current.clear();
+
+      const visible = assets.filter((a) => visibleLayers.has(a.asset_class));
+
+      for (const asset of visible) {
+        const isCritical =
+          asset.status === "CRITICAL" ||
+          (asset.efficiency_pct !== undefined && asset.efficiency_pct < 30) ||
+          (asset.structural_pct !== undefined && asset.structural_pct < 30);
+
+        const el = document.createElement("div");
+        el.style.cssText = "cursor:pointer;";
+        el.innerHTML = markerSvg(asset);
+
+        if (isCritical) {
+          const inner = el.firstElementChild as HTMLElement | null;
+          if (inner) inner.classList.add("tac-marker-pulse");
+        }
+
+        // Hover scale
+        el.addEventListener("mouseenter", () => {
+          el.style.transform = "scale(1.6)";
+          el.style.zIndex    = "10";
+          el.style.filter    = "drop-shadow(0 0 4px " + CLASS_COLORS[asset.asset_class] + ")";
+        });
+        el.addEventListener("mouseleave", () => {
+          el.style.transform = "scale(1)";
+          el.style.zIndex    = "1";
+          el.style.filter    = "";
+        });
+
+        const popup = new maplibregl.Popup({
+          offset: 14,
+          closeButton: false,
+          className: "tac-popup",
+        }).setHTML(buildPopupHtml(asset));
+
+        const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+          .setLngLat([asset.longitude, asset.latitude])
+          .setPopup(popup)
+          .addTo(map!);
+
+        el.addEventListener("click", () => onAssetClick?.(asset));
+
+        markersRef.current.set(asset.asset_id, { marker, asset });
+      }
+    }
+
+    // Run after map loads (may already be loaded on re-renders)
+    if (map.loaded()) {
+      renderMarkers();
+    } else {
+      map.once("load", renderMarkers);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets, visibleLayers]);
+
+  // ── Highlight selected marker ───────────────────────────────────────────────
+  useEffect(() => {
+    markersRef.current.forEach(({ marker, asset }) => {
       const el = marker.getElement();
-      const dot = el.querySelector(".map-marker-dot") as HTMLElement | null;
-      if (!dot) return;
-      if ((companiesProp ?? [])[i]?.id === selectedId) {
-        dot.style.transform = "scale(1.8)";
-        dot.style.boxShadow = "0 0 12px rgba(6,182,212,0.8), 0 1px 4px rgba(0,0,0,0.5)";
-        el.style.zIndex = "10";
+      if (asset.asset_id === selectedId) {
+        el.style.transform = "scale(2)";
+        el.style.zIndex    = "20";
+        el.style.filter    = "drop-shadow(0 0 8px " + CLASS_COLORS[asset.asset_class] + ")";
       } else {
-        dot.style.transform = "scale(1)";
-        dot.style.boxShadow = "0 1px 4px rgba(0,0,0,0.5)";
-        el.style.zIndex = "1";
+        el.style.transform = "scale(1)";
+        el.style.zIndex    = "1";
+        el.style.filter    = "";
       }
     });
   }, [selectedId]);
