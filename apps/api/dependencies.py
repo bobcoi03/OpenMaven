@@ -43,3 +43,20 @@ def _build_graphiti():
 
 
 graphiti = _build_graphiti()
+
+
+# ── Simulation singletons ────────────────────────────────────────────────────
+
+
+def _build_simulation():
+    """Create the simulation manager with the default scenario."""
+    from simulation.scenario import load_default_scenario
+    from ws.connection_manager import ConnectionManager
+
+    mgr = load_default_scenario()
+    ws_mgr = ConnectionManager()
+    mgr._broadcast_fn = ws_mgr.broadcast
+    return mgr, ws_mgr
+
+
+sim_manager, ws_manager = _build_simulation()
