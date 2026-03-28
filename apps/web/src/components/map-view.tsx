@@ -9,12 +9,14 @@
 
 import dynamic from "next/dynamic";
 import type { TacticalAsset, AssetClass } from "@/lib/tactical-mock";
+import type { MapStyleId } from "./map-view-inner";
 
 export interface MapViewProps {
   assets: TacticalAsset[];
   visibleLayers: Set<AssetClass>;
   onAssetClick?: (asset: TacticalAsset) => void;
   selectedId?: string | null;
+  mapStyle?: MapStyleId;
   className?: string;
 }
 

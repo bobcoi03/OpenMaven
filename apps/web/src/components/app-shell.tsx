@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppData } from "@/lib/data-context";
 import { useMapLayers } from "@/lib/map-layer-context";
+import { AssetDetailPanel } from "@/components/asset-detail-panel";
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { searchObjects, queryKnowledgeGraphStream, type QueryChatMessage, type QueryStreamEvent } from "@/lib/api-client";
@@ -75,7 +76,7 @@ const LAYER_CFG: {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { entityCounts, graph } = useAppData();
-  const { visibleLayers, toggleLayer } = useMapLayers();
+  const { visibleLayers, toggleLayer, selectedAsset, setSelectedAsset } = useMapLayers();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -346,6 +347,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {pathname === "/map" ? (
             /* ── Tactical Map Layers ───────────────────────────────── */
             <>
+              {/* Selected asset detail (rendered at top of sidebar) */}
+              {selectedAsset && (
+                <AssetDetailPanel
+                  asset={selectedAsset}
+                  onClose={() => setSelectedAsset(null)}
+                />
+              )}
+
               <div className="px-3 py-2.5 border-b border-[#27272a]">
                 <div className="flex items-center gap-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
                   <Layers size={11} />

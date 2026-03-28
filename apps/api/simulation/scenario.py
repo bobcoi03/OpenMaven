@@ -23,6 +23,9 @@ def load_default_scenario() -> SimulationManager:
     _add_civilian_assets(mgr)
     _add_dependencies(mgr)
 
+    # Give all mobile assets initial patrol waypoints
+    mgr.assign_all_patrols()
+
     return mgr
 
 
@@ -68,46 +71,99 @@ def _add_factions(mgr: SimulationManager) -> None:
 # ── BLUFOR Assets ────────────────────────────────────────────────────────────
 
 
+_MAX_SPEEDS: dict[str, float] = {
+    "M1 Abrams": 65, "T-72A MBT": 60, "M2 Bradley IFV": 66,
+    "BMP-2 IFV": 65, "BTR-82A APC": 80, "HMMWV Transport": 110,
+    "Technical (Armed Pickup)": 100, "M977 HEMTT Supply Truck": 90,
+    "Civilian Bus": 60, "Civilian Sedan": 120,
+    "Infantry Squad": 8,
+}
+
+
 def _add_blue_assets(mgr: SimulationManager) -> None:
+    """BLUFOR Coalition assets with geographically accurate positions.
+
+    Placement rules:
+    - Naval: Mediterranean Sea, 20-50 km offshore from Syrian coast
+    - Aircraft: Airborne over AO at realistic altitudes
+    - Ground armor/vehicles: On or near actual roads (M4, M7, M20 highways)
+    - Artillery: Set back from front lines, near FOBs
+    - Air defense: Near coalition bases
+    """
     blue_assets = [
-        # Drones
-        ("REAPER-01", "MQ-9 Reaper", 34.4215, 40.8732, 7580, 10.84, 370, "FLIR SS380-HD", ["hellfire", "gbu_38_jdam"]),
-        ("REAPER-02", "MQ-9 Reaper", 35.1102, 41.2290, 6200, 245.3, 310, "MTS-B EO/IR", ["hellfire"]),
-        ("HAWKEYE-01", "RQ-4 Global Hawk", 36.1200, 40.5500, 18200, 270.0, 575, "EISS / MP-RTIP Radar", []),
-        # Fighter Jets
-        ("FALCON-01", "F-16C Fighting Falcon", 34.8500, 41.5200, 9150, 135.2, 780, "AN/APG-68 Radar", ["gbu_38_jdam", "gbu_12_paveway"]),
-        ("FALCON-02", "F-16C Fighting Falcon", 33.9500, 42.1000, 8800, 310.5, 820, "AN/APG-68 Radar", ["gbu_38_jdam"]),
-        ("LIGHTNING-01", "F-35B Lightning II", 35.2300, 41.8000, 10500, 90.0, 920, "AN/APG-81 AESA", ["gbu_12_paveway", "cruise_missile"]),
-        # ISR
-        ("SENTRY-01", "E-3A AWACS", 36.5000, 41.2000, 9100, 180.0, 720, "AN/APY-2 Radar", []),
-        # Gunship
-        ("SPOOKY-01", "AC-130 Hercules", 35.0200, 40.9000, 4500, 190.0, 480, "AN/APQ-180 Radar", ["autocannon_30mm", "artillery_155"]),
-        # Helicopters
-        ("APACHE-01", "AH-64 Apache", 34.3800, 40.7500, 850, 280.0, 230, "AN/APG-78 Longbow", ["hellfire"]),
-        ("CHINOOK-01", "CH-47 Chinook", 34.5200, 41.0000, 1200, 45.0, 260, None, []),
-        # Ground
-        ("THUNDER-01", "M1 Abrams", 34.2100, 40.9800, 310, 175.0, 0, None, ["small_arms"]),
-        ("THUNDER-02", "M1 Abrams", 34.3800, 40.8500, 295, 220.0, 0, None, ["small_arms"]),
-        ("THUNDER-03", "M1 Abrams", 34.0500, 41.1200, 280, 90.0, 0, None, ["small_arms"]),
-        ("BULLDOG-01", "M2 Bradley IFV", 34.3200, 40.9200, 300, 140.0, 0, None, ["autocannon_30mm"]),
-        ("WARHORSE-01", "HMMWV Transport", 34.4800, 40.8000, 275, 350.0, 0, None, ["small_arms"]),
-        # Artillery
-        ("STEEL-RAIN-01", "M142 HIMARS", 34.4500, 40.7100, 290, 330.0, 0, None, ["himars_rocket"]),
-        ("HOWITZER-01", "M777 Howitzer", 34.2800, 40.6300, 340, 45.0, 0, None, ["artillery_155"]),
-        ("BASEPLATE-01", "M224 Mortar", 34.1800, 40.8500, 310, 0.0, 0, None, ["mortar_81mm"]),
-        # Naval
-        ("AEGIS-01", "DDG-51 Arleigh Burke", 34.6500, 35.8000, 0, 90.0, 55, "AN/SPY-1D Radar", ["cruise_missile", "sam_missile"]),
-        ("SHADOW-01", "USS Seawolf SSN-21", 34.9000, 35.2000, -120, 195.0, 46, "BQQ-10 Sonar", ["torpedo"]),
-        ("GATOR-01", "USS Wasp LHD-1", 34.7500, 35.5000, 0, 270.0, 37, "AN/SPS-52 Radar", []),
-        # Air Defense
-        ("PATRIOT-01", "MIM-104 Patriot", 34.7300, 41.0800, 285, 315.0, 0, "AN/MPQ-53 Radar", ["sam_missile"]),
-        ("IRON-DOME-01", "Iron Dome Defense System", 34.5100, 40.9200, 195, 90.0, 0, "EL/M-2084 Radar", ["sam_missile"]),
-        # EW
-        ("JAMMER-01", "EW Radar Vehicle", 34.5500, 40.6800, 350, 60.0, 0, "AESA Jammer Array", []),
-        # Logistics
-        ("ATLAS-01", "C-17 Globemaster III", 35.8200, 41.5000, 8500, 90.0, 830, None, []),
-        ("SUPPLY-07", "M977 HEMTT Supply Truck", 34.3100, 40.9500, 270, 120.0, 55, None, []),
-        ("MEDIC-01", "Field Hospital", 34.6200, 41.1500, 220, 0.0, 0, None, []),
+        # ── Drones (airborne over Euphrates Valley) ──────────────────
+        # Over Deir ez-Zor area, orbiting at altitude
+        ("REAPER-01", "MQ-9 Reaper", 35.35, 40.12, 7580, 10.0, 370, "FLIR SS380-HD", ["hellfire", "gbu_38_jdam"]),
+        # Over Al-Mayadin, along Euphrates
+        ("REAPER-02", "MQ-9 Reaper", 35.02, 40.44, 6200, 245.0, 310, "MTS-B EO/IR", ["hellfire"]),
+        # High-altitude ISR over northern Syria
+        ("HAWKEYE-01", "RQ-4 Global Hawk", 36.10, 39.50, 18200, 270.0, 575, "EISS / MP-RTIP Radar", []),
+
+        # ── Fighter Jets (airborne) ──────────────────────────────────
+        # Over eastern Syria, heading southeast toward Iraqi border
+        ("FALCON-01", "F-16C Fighting Falcon", 35.50, 40.80, 9150, 135.0, 780, "AN/APG-68 Radar", ["gbu_38_jdam", "gbu_12_paveway"]),
+        # Over Al-Qa'im border area
+        ("FALCON-02", "F-16C Fighting Falcon", 34.40, 41.00, 8800, 310.0, 820, "AN/APG-68 Radar", ["gbu_38_jdam"]),
+        # Over Raqqa area
+        ("LIGHTNING-01", "F-35B Lightning II", 35.95, 39.00, 10500, 90.0, 920, "AN/APG-81 AESA", ["gbu_12_paveway", "cruise_missile"]),
+
+        # ── ISR (high-altitude orbits) ───────────────────────────────
+        # AWACS over northern AO, racetrack orbit
+        ("SENTRY-01", "E-3A AWACS", 36.50, 40.00, 9100, 180.0, 720, "AN/APY-2 Radar", []),
+
+        # ── Gunship (loitering over Euphrates Valley) ────────────────
+        ("SPOOKY-01", "AC-130 Hercules", 35.10, 40.30, 4500, 190.0, 480, "AN/APQ-180 Radar", ["autocannon_30mm", "artillery_155"]),
+
+        # ── Helicopters (low altitude, near ground forces) ───────────
+        # Apache near Al-Bukamal, supporting ground ops
+        ("APACHE-01", "AH-64 Apache", 34.48, 40.32, 850, 280.0, 230, "AN/APG-78 Longbow", ["hellfire"]),
+        # Chinook resupply run along M7 highway corridor
+        ("CHINOOK-01", "CH-47 Chinook", 34.90, 40.50, 1200, 45.0, 260, None, []),
+
+        # ── Ground Armor (on M7 highway near Al-Bukamal) ────────────
+        # M7 highway runs through Al-Bukamal (34.46°N, 40.34°E)
+        ("THUNDER-01", "M1 Abrams", 34.46, 40.34, 175, 90.0, 0, None, ["small_arms"]),
+        # On road 1km east of Al-Bukamal
+        ("THUNDER-02", "M1 Abrams", 34.46, 40.36, 175, 90.0, 0, None, ["small_arms"]),
+        # Advancing north along road toward Al-Mayadin
+        ("THUNDER-03", "M1 Abrams", 34.65, 40.39, 180, 0.0, 0, None, ["small_arms"]),
+        # Bradley escorting armor column
+        ("BULLDOG-01", "M2 Bradley IFV", 34.50, 40.35, 175, 90.0, 0, None, ["autocannon_30mm"]),
+        # HMMWV on M20 highway near Al-Tanf base (33.52°N, 38.66°E)
+        ("WARHORSE-01", "HMMWV Transport", 33.52, 38.67, 540, 45.0, 55, None, ["small_arms"]),
+
+        # ── Artillery (set back from front, near coalition FOB) ──────
+        # HIMARS 15km behind front line, south of Al-Bukamal
+        ("STEEL-RAIN-01", "M142 HIMARS", 34.35, 40.25, 175, 0.0, 0, None, ["himars_rocket"]),
+        # Howitzer battery near Euphrates
+        ("HOWITZER-01", "M777 Howitzer", 34.40, 40.28, 175, 45.0, 0, None, ["artillery_155"]),
+        # Mortar team forward-deployed with ground forces
+        ("BASEPLATE-01", "M224 Mortar", 34.48, 40.33, 175, 0.0, 0, None, ["mortar_81mm"]),
+
+        # ── Naval (Eastern Mediterranean, offshore from Tartus) ──────
+        # DDG-51 destroyer — 40km offshore in open Mediterranean
+        ("AEGIS-01", "DDG-51 Arleigh Burke", 34.65, 34.50, 0, 90.0, 55, "AN/SPY-1D Radar", ["cruise_missile", "sam_missile"]),
+        # SSN submarine — deep Mediterranean, 60km offshore
+        ("SHADOW-01", "USS Seawolf SSN-21", 34.40, 34.20, -120, 195.0, 46, "BQQ-10 Sonar", ["torpedo"]),
+        # LHD amphibious — between destroyer and coast, 50km offshore
+        ("GATOR-01", "USS Wasp LHD-1", 34.55, 34.80, 0, 270.0, 37, "AN/SPS-52 Radar", []),
+
+        # ── Air Defense (near coalition bases) ───────────────────────
+        # Patriot battery at Al-Tanf base
+        ("PATRIOT-01", "MIM-104 Patriot", 33.53, 38.65, 540, 0.0, 0, "AN/MPQ-53 Radar", ["sam_missile"]),
+        # Iron Dome protecting Al-Bukamal area
+        ("IRON-DOME-01", "Iron Dome Defense System", 34.42, 40.30, 175, 90.0, 0, "EL/M-2084 Radar", ["sam_missile"]),
+
+        # ── EW (near front line) ─────────────────────────────────────
+        ("JAMMER-01", "EW Radar Vehicle", 34.55, 40.38, 175, 60.0, 0, "AESA Jammer Array", []),
+
+        # ── Logistics ────────────────────────────────────────────────
+        # C-17 inbound from Turkey, over northern Syria
+        ("ATLAS-01", "C-17 Globemaster III", 36.30, 38.50, 8500, 135.0, 830, None, []),
+        # Supply truck on M20 highway heading east
+        ("SUPPLY-07", "M977 HEMTT Supply Truck", 33.80, 39.10, 450, 90.0, 55, None, []),
+        # Field hospital at Al-Tanf base
+        ("MEDIC-01", "Field Hospital", 33.51, 38.68, 540, 0.0, 0, None, []),
     ]
 
     for callsign, atype, lat, lon, alt, hdg, spd, sensor, weapons in blue_assets:
@@ -118,7 +174,7 @@ def _add_blue_assets(mgr: SimulationManager) -> None:
             faction_id="blue",
             position=Position(latitude=lat, longitude=lon, altitude_m=alt, heading_deg=hdg),
             speed_kmh=spd,
-            max_speed_kmh=spd if spd > 0 else 0,
+            max_speed_kmh=max(spd, _MAX_SPEEDS.get(atype, spd)),
             sensor_type=sensor,
             weapons=weapons,
         ))
@@ -128,15 +184,25 @@ def _add_blue_assets(mgr: SimulationManager) -> None:
 
 
 def _add_red_assets(mgr: SimulationManager) -> None:
+    """OPFOR assets positioned around Deir ez-Zor city and northern Euphrates.
+
+    T-72s and BMPs on roads in/around Deir ez-Zor (35.33°N, 40.14°E).
+    Technicals on side roads. S-400s set back to protect the city.
+    """
     red_assets = [
-        ("HOSTILE-T72-01", "T-72A MBT", 35.3200, 40.3500, 380, 210.0, 0, "1A40 Fire Control", ["small_arms"]),
-        ("HOSTILE-T72-02", "T-72A MBT", 35.2800, 40.4000, 390, 225.0, 0, "1A40 Fire Control", ["small_arms"]),
-        ("HOSTILE-BMP-01", "BMP-2 IFV", 35.3500, 40.3800, 375, 215.0, 0, None, ["autocannon_30mm"]),
-        ("HOSTILE-BMP-02", "BMP-2 IFV", 35.4000, 40.4200, 365, 200.0, 0, None, ["autocannon_30mm"]),
-        ("HOSTILE-TECH-01", "Technical (Armed Pickup)", 34.9800, 40.2100, 420, 160.0, 65, None, ["small_arms"]),
-        ("HOSTILE-TECH-02", "Technical (Armed Pickup)", 35.0500, 40.1800, 400, 145.0, 70, None, ["small_arms"]),
-        ("GROWLER-01", "S-400 Triumf SAM", 35.4200, 40.1500, 410, 0.0, 0, "91N6E Radar", ["sam_missile"]),
-        ("GROWLER-02", "S-400 Triumf SAM", 35.6000, 40.0800, 430, 0.0, 0, "91N6E Radar", ["sam_missile"]),
+        # T-72s on main road through Deir ez-Zor
+        ("HOSTILE-T72-01", "T-72A MBT", 35.33, 40.13, 210, 180.0, 0, "1A40 Fire Control", ["small_arms"]),
+        ("HOSTILE-T72-02", "T-72A MBT", 35.31, 40.15, 210, 180.0, 0, "1A40 Fire Control", ["small_arms"]),
+        # BMPs on road south of Deir ez-Zor toward Al-Mayadin
+        ("HOSTILE-BMP-01", "BMP-2 IFV", 35.20, 40.20, 200, 200.0, 0, None, ["autocannon_30mm"]),
+        ("HOSTILE-BMP-02", "BMP-2 IFV", 35.15, 40.25, 200, 200.0, 0, None, ["autocannon_30mm"]),
+        # Technicals on roads near Al-Mayadin (35.02°N, 40.45°E)
+        ("HOSTILE-TECH-01", "Technical (Armed Pickup)", 35.02, 40.44, 195, 160.0, 65, None, ["small_arms"]),
+        ("HOSTILE-TECH-02", "Technical (Armed Pickup)", 34.95, 40.40, 190, 145.0, 70, None, ["small_arms"]),
+        # S-400 batteries north of Deir ez-Zor, defending the city
+        ("GROWLER-01", "S-400 Triumf SAM", 35.45, 40.05, 250, 0.0, 0, "91N6E Radar", ["sam_missile"]),
+        # Second S-400 near Raqqa (35.95°N, 39.01°E)
+        ("GROWLER-02", "S-400 Triumf SAM", 35.90, 39.05, 280, 0.0, 0, "91N6E Radar", ["sam_missile"]),
     ]
 
     for callsign, atype, lat, lon, alt, hdg, spd, sensor, weapons in red_assets:
@@ -147,7 +213,7 @@ def _add_red_assets(mgr: SimulationManager) -> None:
             faction_id="red",
             position=Position(latitude=lat, longitude=lon, altitude_m=alt, heading_deg=hdg),
             speed_kmh=spd,
-            max_speed_kmh=spd if spd > 0 else 0,
+            max_speed_kmh=max(spd, _MAX_SPEEDS.get(atype, spd)),
             sensor_type=sensor,
             weapons=weapons,
         ))
@@ -157,11 +223,20 @@ def _add_red_assets(mgr: SimulationManager) -> None:
 
 
 def _add_civilian_assets(mgr: SimulationManager) -> None:
+    """Civilian vehicles on major highways near cities.
+
+    - Homs (34.73°N, 36.72°E): M5 highway
+    - Damascus outskirts (33.51°N, 36.29°E): M5 highway
+    """
     civ_assets = [
-        ("CIV-BUS-01", "Civilian Bus", 34.6000, 40.7500, 260, 90.0, 40),
-        ("CIV-BUS-02", "Civilian Bus", 34.4200, 40.6200, 245, 180.0, 35),
-        ("CIV-SEDAN-01", "Civilian Sedan", 34.5800, 40.7800, 255, 270.0, 50),
-        ("CIV-SEDAN-02", "Civilian Sedan", 34.3500, 40.9000, 230, 45.0, 55),
+        # Bus on M5 highway near Homs
+        ("CIV-BUS-01", "Civilian Bus", 34.73, 36.73, 500, 0.0, 40),
+        # Bus on M5 between Homs and Damascus
+        ("CIV-BUS-02", "Civilian Bus", 34.10, 36.50, 750, 180.0, 35),
+        # Sedan on M5 entering Homs from south
+        ("CIV-SEDAN-01", "Civilian Sedan", 34.70, 36.70, 500, 350.0, 50),
+        # Sedan on highway near Damascus
+        ("CIV-SEDAN-02", "Civilian Sedan", 33.55, 36.32, 690, 45.0, 55),
     ]
 
     for callsign, atype, lat, lon, alt, hdg, spd in civ_assets:
@@ -172,7 +247,7 @@ def _add_civilian_assets(mgr: SimulationManager) -> None:
             faction_id="civilian",
             position=Position(latitude=lat, longitude=lon, altitude_m=alt, heading_deg=hdg),
             speed_kmh=spd,
-            max_speed_kmh=spd,
+            max_speed_kmh=max(spd, _MAX_SPEEDS.get(atype, spd)),
         ))
 
 

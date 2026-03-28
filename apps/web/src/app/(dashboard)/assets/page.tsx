@@ -320,7 +320,7 @@ const MOCK_ASSETS: AssetTelemetry[] = [
     asset_type: "HMS Queen Elizabeth Carrier",
     asset_class: "Military",
     model_path: null,
-    embed_url: "https://sketchfab.com/models/fc3143eef51346f2bb8d39be3a633042/embed",
+    embed_url: "https://sketchfab.com/models/cdac73e931f6482e86960a326fef73bf/embed",
     latitude: 33.2800,
     longitude: 44.1000,
     altitude_m: 0,

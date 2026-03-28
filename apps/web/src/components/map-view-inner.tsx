@@ -3,22 +3,25 @@
 /**
  * map-view-inner.tsx
  *
- * Tactical MapLibre map component.  Renders battlefield assets from the
- * Smart Maven simulation engine as class-coded markers on a satellite base
- * layer.  Supports layer visibility toggling (Military / Infrastructure /
- * Logistics) and displays a detail popup on hover.
+ * Tactical MapLibre map with MIL-STD-2525 NATO markers rendered via milsymbol.
+ * Markers are colored by affiliation (friendly/hostile/neutral) and shaped by
+ * battle dimension (air/ground/sea/subsurface).  Each marker shows a callsign
+ * label below the symbol.
  *
- * Must be loaded via next/dynamic with ssr:false — maplibre-gl is
- * browser-only.
+ * Must be loaded via next/dynamic with ssr:false — maplibre-gl is browser-only.
  */
 
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
+import ms from "milsymbol";
 import type { TacticalAsset, AssetClass } from "@/lib/tactical-mock";
+import { getSidc } from "@/lib/sidc-map";
 
-// ── Satellite base style ──────────────────────────────────────────────────────
+// ── Map styles ───────────────────────────────────────────────────────────────
 
-const satelliteStyle: maplibregl.StyleSpecification = {
+const DARK_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+
+const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     esri: {
@@ -32,121 +35,25 @@ const satelliteStyle: maplibregl.StyleSpecification = {
     },
   },
   layers: [
-    {
-      id: "esri-satellite",
-      type: "raster",
-      source: "esri",
-      minzoom: 0,
-      maxzoom: 18,
-    },
+    { id: "esri-satellite", type: "raster", source: "esri", minzoom: 0, maxzoom: 18 },
   ],
 };
 
-// ── Marker colour palette ─────────────────────────────────────────────────────
+export type MapStyleId = "dark" | "satellite";
 
-const CLASS_COLORS: Record<AssetClass, string> = {
-  Military:       "#00d4ff",   // bright cyan  — friendly forces
-  Infrastructure: "#f59e0b",   // amber        — fixed installations
-  Logistics:      "#94a3b8",   // slate        — supply lines
-};
+export const MAP_STYLES: { id: MapStyleId; label: string; style: string | maplibregl.StyleSpecification }[] = [
+  { id: "dark",      label: "Dark",      style: DARK_STYLE },
+  { id: "satellite", label: "Satellite",  style: SATELLITE_STYLE },
+];
 
-const CLASS_BORDER: Record<AssetClass, string> = {
-  Military:       "#0891b2",
-  Infrastructure: "#b45309",
-  Logistics:      "#475569",
-};
+// ── NATO symbol rendering ────────────────────────────────────────────────────
 
-// ── SVG shapes per asset class ────────────────────────────────────────────────
+const MARKER_SIZE = 18;
 
-function markerSvg(asset: TacticalAsset): string {
-  const fill  = CLASS_COLORS[asset.asset_class];
-  const stroke = CLASS_BORDER[asset.asset_class];
-
-  // MIL-2525-inspired shapes (simplified)
-  switch (asset.asset_class) {
-    case "Military":
-      // Rotated square (diamond) — standard friendly ground unit symbol
-      if (asset.asset_type === "Jet") {
-        return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <polygon points="8,1 15,8 8,15 1,8" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
-          <line x1="8" y1="4" x2="8" y2="12" stroke="${stroke}" stroke-width="1"/>
-        </svg>`;
-      }
-      if (asset.asset_type === "Infantry") {
-        return `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="1.5" y="1.5" width="9" height="9" rx="1" fill="${fill}99" stroke="${fill}" stroke-width="1.5"/>
-        </svg>`;
-      }
-      // Tank — solid diamond
-      return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <polygon points="7,1 13,7 7,13 1,7" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
-      </svg>`;
-
-    case "Infrastructure": {
-      // Square with inner cross — installation symbol
-      const isCritical =
-        asset.status === "CRITICAL" ||
-        (asset.efficiency_pct !== undefined && asset.efficiency_pct < 30) ||
-        (asset.structural_pct !== undefined && asset.structural_pct < 30);
-      const infill = isCritical ? "#ef4444" : fill;
-      return `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="1" y="1" width="12" height="12" rx="1" fill="${infill}33" stroke="${infill}" stroke-width="1.5"/>
-        <line x1="7" y1="3" x2="7" y2="11" stroke="${infill}" stroke-width="1"/>
-        <line x1="3" y1="7" x2="11" y2="7" stroke="${infill}" stroke-width="1"/>
-      </svg>`;
-    }
-
-    case "Logistics":
-      // Small open circle — supply/logistics unit
-      return `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="6" cy="6" r="4.5" fill="${fill}44" stroke="${fill}" stroke-width="1.5"/>
-      </svg>`;
-
-    default:
-      return `<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="${fill}"/></svg>`;
-  }
-}
-
-// ── Popup HTML ────────────────────────────────────────────────────────────────
-
-function buildPopupHtml(asset: TacticalAsset): string {
-  const color = CLASS_COLORS[asset.asset_class];
-
-  const metricLine = (() => {
-    if (asset.speed_kmh !== undefined) {
-      return `<span style="color:#94a3b8">SPD</span> ${asset.speed_kmh} km/h &nbsp;
-              <span style="color:#94a3b8">HDG</span> ${asset.heading_deg ?? "—"}°`;
-    }
-    if (asset.efficiency_pct !== undefined) return `<span style="color:#94a3b8">EFF</span> ${asset.efficiency_pct.toFixed(1)}%`;
-    if (asset.output_mw      !== undefined) return `<span style="color:#94a3b8">OUT</span> ${asset.output_mw.toFixed(1)} MW`;
-    if (asset.structural_pct !== undefined) return `<span style="color:#94a3b8">STR</span> ${asset.structural_pct.toFixed(1)}%`;
-    return "";
-  })();
-
-  const statusBadge = asset.status
-    ? `<span style="padding:1px 5px;border-radius:2px;font-size:9px;font-weight:600;
-         background:${asset.status === "CRITICAL" ? "#ef4444" : asset.status === "DEGRADED" ? "#f59e0b" : "#10b981"}22;
-         color:${asset.status === "CRITICAL" ? "#ef4444" : asset.status === "DEGRADED" ? "#f59e0b" : "#10b981"}">
-        ${asset.status}
-       </span>`
-    : "";
-
-  return `
-    <div style="font-family:'Inter',system-ui,sans-serif;padding:4px 2px;min-width:160px">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color}"></span>
-        <strong style="font-size:11px;color:#e2e8f0">${asset.asset_type}</strong>
-        ${statusBadge}
-      </div>
-      <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">
-        ${asset.asset_class}
-      </div>
-      <div style="font-size:10px;color:#94a3b8;font-family:monospace">${metricLine}</div>
-      <div style="font-size:9px;color:#475569;margin-top:3px;font-family:monospace">
-        ${asset.latitude.toFixed(4)}°N &nbsp; ${asset.longitude.toFixed(4)}°E
-      </div>
-    </div>
-  `;
+function renderNatoSymbol(asset: TacticalAsset): string {
+  const sidc = getSidc(asset.sim_asset_type, asset.affiliation);
+  const symbol = new ms.Symbol(sidc, { size: MARKER_SIZE });
+  return symbol.asSVG();
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -156,6 +63,7 @@ interface TacticalMapProps {
   visibleLayers: Set<AssetClass>;
   onAssetClick?: (asset: TacticalAsset) => void;
   selectedId?: string | null;
+  mapStyle?: MapStyleId;
   className?: string;
 }
 
@@ -166,11 +74,16 @@ export function MapViewInner({
   visibleLayers,
   onAssetClick,
   selectedId,
+  mapStyle = "dark",
   className = "",
 }: TacticalMapProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef       = useRef<maplibregl.Map | null>(null);
-  const markersRef   = useRef<Map<string, { marker: maplibregl.Marker; asset: TacticalAsset }>>(new Map());
+  const containerRef      = useRef<HTMLDivElement>(null);
+  const mapRef            = useRef<maplibregl.Map | null>(null);
+  const markersRef        = useRef<Map<string, { marker: maplibregl.Marker; asset: TacticalAsset }>>(new Map());
+  const onAssetClickRef   = useRef(onAssetClick);
+  onAssetClickRef.current = onAssetClick;
+
+  const resolvedStyle = MAP_STYLES.find((s) => s.id === mapStyle)?.style ?? DARK_STYLE;
 
   // ── Initialise map ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -178,11 +91,10 @@ export function MapViewInner({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: satelliteStyle,
-      // Centre on the theatre: Eastern Syria / Western Iraq border
+      style: resolvedStyle,
       center: [43.0, 33.0],
       zoom: 5.5,
-      attributionControl: true,
+      attributionControl: {},
       maxZoom: 16,
     });
 
@@ -193,89 +105,111 @@ export function MapViewInner({
       mapRef.current = null;
       markersRef.current.clear();
     };
-    // Intentionally run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Sync markers when assets or visibleLayers change ───────────────────────
+  // ── Switch style when mapStyle prop changes ────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.setStyle(resolvedStyle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapStyle]);
+
+  // ── Sync markers — add/remove/update without full rebuild ──────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    function renderMarkers() {
+    function syncMarkers() {
       if (!map) return;
 
-      // Remove all existing markers
-      markersRef.current.forEach(({ marker }) => marker.remove());
-      markersRef.current.clear();
-
       const visible = assets.filter((a) => visibleLayers.has(a.asset_class));
+      const visibleIds = new Set(visible.map((a) => a.asset_id));
+
+      // Remove markers for assets no longer visible
+      markersRef.current.forEach(({ marker }, id) => {
+        if (!visibleIds.has(id)) {
+          marker.remove();
+          markersRef.current.delete(id);
+        }
+      });
 
       for (const asset of visible) {
-        const isCritical =
-          asset.status === "CRITICAL" ||
-          (asset.efficiency_pct !== undefined && asset.efficiency_pct < 30) ||
-          (asset.structural_pct !== undefined && asset.structural_pct < 30);
+        const existing = markersRef.current.get(asset.asset_id);
 
-        const el = document.createElement("div");
-        el.style.cssText = "cursor:pointer;";
-        el.innerHTML = markerSvg(asset);
-
-        if (isCritical) {
-          const inner = el.firstElementChild as HTMLElement | null;
-          if (inner) inner.classList.add("tac-marker-pulse");
+        if (existing) {
+          existing.marker.setLngLat([asset.longitude, asset.latitude]);
+          existing.asset = asset;
+          continue;
         }
 
-        // Hover scale
+        // Build marker element: NATO symbol + callsign label
+        const el = document.createElement("div");
+        el.style.cssText = "cursor:pointer;display:flex;flex-direction:column;align-items:center;";
+
+        const inner = document.createElement("div");
+        inner.style.cssText = "transition:transform 120ms ease,filter 120ms ease;line-height:0;";
+        inner.innerHTML = renderNatoSymbol(asset);
+        el.appendChild(inner);
+
+        // Callsign label below the symbol
+        const label = document.createElement("div");
+        label.textContent = asset.callsign;
+        label.style.cssText =
+          "font-size:8px;font-family:'Inter',system-ui,monospace;font-weight:600;" +
+          "color:#d4d4d8;text-shadow:0 1px 3px rgba(0,0,0,0.9);" +
+          "white-space:nowrap;margin-top:1px;letter-spacing:0.03em;pointer-events:none;";
+        el.appendChild(label);
+
+        // Hover effects (on inner, not el, to preserve MapLibre's transform)
         el.addEventListener("mouseenter", () => {
-          el.style.transform = "scale(1.6)";
-          el.style.zIndex    = "10";
-          el.style.filter    = "drop-shadow(0 0 4px " + CLASS_COLORS[asset.asset_class] + ")";
+          inner.style.transform = "scale(1.4)";
+          el.style.zIndex       = "10";
+          inner.style.filter    = "drop-shadow(0 0 6px rgba(255,255,255,0.5))";
         });
         el.addEventListener("mouseleave", () => {
-          el.style.transform = "scale(1)";
-          el.style.zIndex    = "1";
-          el.style.filter    = "";
+          inner.style.transform = "scale(1)";
+          el.style.zIndex       = "1";
+          inner.style.filter    = "";
         });
-
-        const popup = new maplibregl.Popup({
-          offset: 14,
-          closeButton: false,
-          className: "tac-popup",
-        }).setHTML(buildPopupHtml(asset));
 
         const marker = new maplibregl.Marker({ element: el, anchor: "center" })
           .setLngLat([asset.longitude, asset.latitude])
-          .setPopup(popup)
           .addTo(map!);
 
-        el.addEventListener("click", () => onAssetClick?.(asset));
+        const assetId = asset.asset_id;
+        el.addEventListener("click", () => {
+          const entry = markersRef.current.get(assetId);
+          if (entry) onAssetClickRef.current?.(entry.asset);
+        });
 
         markersRef.current.set(asset.asset_id, { marker, asset });
       }
     }
 
-    // Run after map loads (may already be loaded on re-renders)
     if (map.loaded()) {
-      renderMarkers();
+      syncMarkers();
     } else {
-      map.once("load", renderMarkers);
+      map.once("load", syncMarkers);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assets, visibleLayers]);
 
   // ── Highlight selected marker ───────────────────────────────────────────────
   useEffect(() => {
     markersRef.current.forEach(({ marker, asset }) => {
       const el = marker.getElement();
+      const inner = el.firstElementChild as HTMLElement | null;
+      if (!inner) return;
       if (asset.asset_id === selectedId) {
-        el.style.transform = "scale(2)";
-        el.style.zIndex    = "20";
-        el.style.filter    = "drop-shadow(0 0 8px " + CLASS_COLORS[asset.asset_class] + ")";
+        inner.style.transform = "scale(1.8)";
+        el.style.zIndex       = "20";
+        inner.style.filter    = "drop-shadow(0 0 8px rgba(255,255,255,0.6))";
       } else {
-        el.style.transform = "scale(1)";
-        el.style.zIndex    = "1";
-        el.style.filter    = "";
+        inner.style.transform = "scale(1)";
+        el.style.zIndex       = "1";
+        inner.style.filter    = "";
       }
     });
   }, [selectedId]);

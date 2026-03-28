@@ -1,9 +1,9 @@
 /**
- * Bridge: convert SimAsset → TacticalAsset so the existing map renders live data.
+ * Bridge: convert SimAsset → TacticalAsset so the map renders live data.
  */
 
 import type { SimAsset } from "./use-simulation";
-import type { TacticalAsset, AssetClass, AssetType } from "./tactical-mock";
+import type { TacticalAsset, AssetClass, AssetType, Affiliation } from "./tactical-mock";
 
 const TYPE_TO_CLASS: Record<string, AssetClass> = {
   "MQ-9 Reaper": "Military",
@@ -46,7 +46,12 @@ const TYPE_TO_CLASS: Record<string, AssetClass> = {
   "NATO Ammo Crate": "Logistics",
 };
 
-/** Map asset_type to the simplified AssetType the map markers understand. */
+const FACTION_TO_AFFILIATION: Record<string, Affiliation> = {
+  blue: "friendly",
+  red: "hostile",
+  civilian: "neutral",
+};
+
 function toMapType(assetType: string): AssetType {
   if (assetType.includes("Jet") || assetType.includes("F-16") || assetType.includes("F-35") || assetType.includes("AWACS") || assetType.includes("AC-130")) return "Jet";
   if (assetType.includes("Cargo") || assetType.includes("C-17") || assetType.includes("Chinook")) return "Cargo Plane";
@@ -56,7 +61,6 @@ function toMapType(assetType: string): AssetType {
   if (assetType.includes("Oil") || assetType.includes("Hospital") || assetType.includes("Base")) return "Oil Plant";
   if (assetType.includes("Bridge")) return "Bridge";
   if (assetType.includes("Bus") || assetType.includes("Sedan")) return "Truck";
-  // Default: anything airborne is a Jet
   return "Jet";
 }
 
@@ -65,6 +69,10 @@ export function simAssetToTactical(sim: SimAsset): TacticalAsset {
     asset_id: sim.asset_id,
     asset_type: toMapType(sim.asset_type),
     asset_class: TYPE_TO_CLASS[sim.asset_type] ?? "Military",
+    faction_id: sim.faction_id,
+    affiliation: FACTION_TO_AFFILIATION[sim.faction_id] ?? "unknown",
+    callsign: sim.callsign,
+    sim_asset_type: sim.asset_type,
     latitude: sim.position.latitude,
     longitude: sim.position.longitude,
     timestamp: new Date().toISOString(),

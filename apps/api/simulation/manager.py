@@ -61,8 +61,9 @@ class SimulationManager:
 
     def __init__(self, tick_duration_s: float = 10.0) -> None:
         self.tick: int = 0
-        self.speed: SimSpeed = SimSpeed.PAUSED
+        self.speed: SimSpeed = SimSpeed.NORMAL
         self.tick_duration_s: float = tick_duration_s
+        self._patrol_assets: set[str] = set()  # asset IDs on auto-patrol
 
         self.assets: dict[str, SimAsset] = {}
         self.factions: dict[str, Faction] = {}
@@ -200,6 +201,64 @@ class SimulationManager:
             "heading": round(heading, 1),
         }
 
+    # ── Auto-patrol ─────────────────────────────────────────────────────
+
+    # Static asset types that should never patrol
+    _STATIC_TYPES: set[str] = {
+        "M777 Howitzer", "M224 Mortar", "M142 HIMARS",
+        "S-400 Triumf SAM", "MIM-104 Patriot", "Iron Dome Defense System",
+        "EW Radar Vehicle", "Forward Operating Base", "Field Hospital",
+        "Oil Pump Jack",
+    }
+
+    def assign_patrol(self, asset_id: str) -> None:
+        """Give an asset a random waypoint near its current position."""
+        asset = self.assets.get(asset_id)
+        if asset is None or not asset.is_alive():
+            return
+        if asset.max_speed_kmh <= 0 and asset.speed_kmh <= 0:
+            return
+        if asset.asset_type in self._STATIC_TYPES:
+            return
+
+        # Pick patrol radius based on asset domain
+        atype = asset.asset_type
+        is_air = any(k in atype for k in (
+            "Reaper", "Global Hawk", "F-16", "F-35", "AC-130",
+            "AWACS", "Apache", "Chinook", "C-17", "Drone",
+        ))
+        is_sea = any(k in atype for k in ("DDG", "Arleigh", "Seawolf", "Wasp", "Patrol Boat", "Queen Elizabeth"))
+
+        if is_air:
+            radius_deg = 1.5  # ~150 km
+            terrain = "air"
+            alt = asset.position.altitude_m
+        elif is_sea:
+            radius_deg = 0.5  # ~50 km
+            terrain = "water"
+            alt = 0.0
+        else:
+            radius_deg = 0.15  # ~15 km for ground
+            terrain = "desert"
+            alt = asset.position.altitude_m
+
+        # Random destination within radius, clamped to theatre
+        dlat = (random.random() - 0.5) * 2 * radius_deg
+        dlon = (random.random() - 0.5) * 2 * radius_deg
+        dest_lat = max(29.0, min(37.0, asset.position.latitude + dlat))
+        dest_lon = max(34.0, min(48.0, asset.position.longitude + dlon))
+
+        self.command_move(asset_id, dest_lat, dest_lon, dest_alt=alt, terrain=terrain)
+        self._patrol_assets.add(asset_id)
+
+    def assign_all_patrols(self) -> None:
+        """Give every mobile asset an initial patrol waypoint."""
+        for asset_id, asset in self.assets.items():
+            if asset.is_alive() and asset.asset_type not in self._STATIC_TYPES:
+                speed = asset.max_speed_kmh or asset.speed_kmh
+                if speed > 0:
+                    self.assign_patrol(asset_id)
+
     # ── Tick loop ─────────────────────────────────────────────────────────
 
     async def _tick_loop(self) -> None:
@@ -258,6 +317,11 @@ class SimulationManager:
             asset.position.altitude_m = order.destination.altitude_m
             asset.movement_order = None
             asset.status = AssetStatus.ACTIVE
+
+            # Auto-reassign patrol waypoint
+            if asset.asset_id in self._patrol_assets:
+                self.assign_patrol(asset.asset_id)
+
             return {
                 "asset_id": asset.asset_id,
                 "event": "arrived",
