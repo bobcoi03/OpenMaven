@@ -133,26 +133,26 @@ export function SourcesView({ onIngestComplete }: SourcesViewProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#09090b] min-w-0 overflow-hidden">
+    <div className="h-full flex flex-col bg-[var(--om-bg-deep)] min-w-0 overflow-hidden">
       {/* Upload Area */}
-      <div className="p-4 border-b border-zinc-800/80 bg-[#141417] space-y-3">
+      <div className="p-4 border-b border-[var(--om-border)] bg-[var(--om-bg-primary)] space-y-3">
         {/* Drop Zone */}
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => fileRef.current?.click()}
-          className={`flex flex-col items-center justify-center gap-2 py-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
+          className={`flex flex-col items-center justify-center gap-2 py-6 rounded-sm border-2 border-dashed cursor-pointer transition-colors ${
             dragOver
-              ? "border-cyan-500/50 bg-cyan-500/5"
-              : "border-zinc-700/60 hover:border-zinc-600 bg-zinc-900/30"
+              ? "border-[var(--om-blue)]/50 bg-[var(--om-blue)]/5"
+              : "border-[var(--om-border-strong)] hover:border-[var(--om-text-muted)] bg-[var(--om-bg-deep)]/30"
           }`}
         >
-          <Upload size={20} className={dragOver ? "text-cyan-400" : "text-zinc-500"} />
-          <div className="text-[11px] text-zinc-400">
-            Drop a file here or <span className="text-zinc-200 font-medium">browse</span>
+          <Upload size={20} className={dragOver ? "text-[var(--om-blue-light)]" : "text-[var(--om-text-muted)]"} />
+          <div className="text-[11px] text-[var(--om-text-secondary)]">
+            Drop a file here or <span className="text-[var(--om-text-primary)] font-medium">browse</span>
           </div>
-          <div className="text-[10px] text-zinc-600">
+          <div className="text-[10px] text-[var(--om-text-muted)]">
             CSV, XLSX, JSON, PDF, DOCX, PPTX, HTML
           </div>
           <input
@@ -168,20 +168,20 @@ export function SourcesView({ onIngestComplete }: SourcesViewProps) {
         {/* URL Input */}
         <div className="flex gap-2">
           <div className="flex-1 relative">
-            <Globe size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <Globe size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--om-text-muted)]" />
             <input
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleUrl()}
               placeholder="https://example.com"
-              className="w-full pl-7 pr-3 py-1.5 text-[11px] rounded bg-zinc-900/80 border border-zinc-800/80 text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+              className="w-full pl-7 pr-3 py-1.5 text-[11px] rounded-sm bg-[var(--om-bg-deep)]/80 border border-[var(--om-border-strong)] text-[var(--om-text-secondary)] placeholder:text-[var(--om-text-disabled)] focus:outline-none focus:border-[var(--om-text-muted)]"
             />
           </div>
           <button
             onClick={handleUrl}
             disabled={!url.trim() || status === "uploading"}
-            className="px-3 py-1.5 text-[11px] font-medium text-zinc-200 bg-zinc-800 border border-zinc-700/60 rounded hover:bg-zinc-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-[11px] font-medium text-[var(--om-text-primary)] bg-[var(--om-bg-elevated)] border border-[var(--om-border-strong)] rounded-sm hover:bg-[var(--om-bg-hover)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Fetch
           </button>
@@ -189,14 +189,14 @@ export function SourcesView({ onIngestComplete }: SourcesViewProps) {
 
         {/* Status Banner */}
         {status === "uploading" && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded bg-zinc-800/60 border border-zinc-700/40">
-            <Loader2 size={13} className="text-cyan-400 animate-spin" />
-            <span className="text-[11px] text-zinc-300">Processing...</span>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-sm bg-[var(--om-bg-elevated)] border border-[var(--om-border)]">
+            <Loader2 size={13} className="text-[var(--om-blue-light)] animate-spin" />
+            <span className="text-[11px] text-[var(--om-text-secondary)]">Processing...</span>
           </div>
         )}
 
         {status === "success" && result && (
-          <div className="flex items-start gap-2 px-3 py-2 rounded bg-emerald-500/10 border border-emerald-500/20 overflow-hidden">
+          <div className="flex items-start gap-2 px-3 py-2 rounded-sm bg-emerald-500/10 border border-emerald-500/20 overflow-hidden">
             <CheckCircle size={13} className="text-emerald-400 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="text-[11px] text-emerald-300 font-medium truncate">
@@ -214,7 +214,7 @@ export function SourcesView({ onIngestComplete }: SourcesViewProps) {
         )}
 
         {status === "error" && (
-          <div className="flex items-start gap-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/20 overflow-hidden">
+          <div className="flex items-start gap-2 px-3 py-2 rounded-sm bg-red-500/10 border border-red-500/20 overflow-hidden">
             <AlertCircle size={13} className="text-red-400 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="text-[11px] text-red-300 font-medium">
@@ -233,17 +233,17 @@ export function SourcesView({ onIngestComplete }: SourcesViewProps) {
       </div>
 
       {/* Stats Strip */}
-      <div className="flex items-center gap-6 px-4 py-2 border-b border-zinc-800/60 bg-[#111114]">
+      <div className="flex items-center gap-6 px-4 py-2 border-b border-[var(--om-border)] bg-[var(--om-bg-elevated)]">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-[0.1em]">Sources</span>
-          <span className="text-[12px] text-zinc-200 font-semibold font-[family-name:var(--font-mono)]">
+          <span className="text-[10px] text-[var(--om-text-muted)] uppercase tracking-[0.1em]">Sources</span>
+          <span className="text-[12px] text-[var(--om-text-primary)] font-semibold font-[family-name:var(--font-mono)]">
             {sources.length}
           </span>
         </div>
-        <div className="w-px h-3.5 bg-zinc-800" />
+        <div className="w-px h-3.5 bg-[var(--om-border-strong)]" />
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-[0.1em]">Total Records</span>
-          <span className="text-[12px] text-zinc-200 font-semibold font-[family-name:var(--font-mono)]">
+          <span className="text-[10px] text-[var(--om-text-muted)] uppercase tracking-[0.1em]">Total Records</span>
+          <span className="text-[12px] text-[var(--om-text-primary)] font-semibold font-[family-name:var(--font-mono)]">
             {sources.reduce((s, r) => s + r.row_count, 0)}
           </span>
         </div>
@@ -252,7 +252,7 @@ export function SourcesView({ onIngestComplete }: SourcesViewProps) {
       {/* Sources Table */}
       <div className="flex-1 overflow-x-auto overflow-y-auto min-w-0">
         {sources.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-zinc-500">
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-[var(--om-text-muted)]">
             <FileText size={24} />
             <span className="text-[11px]">No sources ingested yet</span>
           </div>
@@ -266,27 +266,27 @@ export function SourcesView({ onIngestComplete }: SourcesViewProps) {
               <col className="w-[18%]" />
               <col className="w-[6%]" />
             </colgroup>
-            <thead className="sticky top-0 bg-[#141417] z-10">
-              <tr className="border-b border-zinc-800/80">
-                <th className="text-left px-4 py-2 text-[10px] text-zinc-500 font-semibold uppercase tracking-[0.08em]">File</th>
-                <th className="text-left px-3 py-2 text-[10px] text-zinc-500 font-semibold uppercase tracking-[0.08em]">Type</th>
-                <th className="text-right px-3 py-2 text-[10px] text-zinc-500 font-semibold uppercase tracking-[0.08em]">Records</th>
-                <th className="text-left px-3 py-2 text-[10px] text-zinc-500 font-semibold uppercase tracking-[0.08em]">Ingested</th>
-                <th className="text-left px-3 py-2 text-[10px] text-zinc-500 font-semibold uppercase tracking-[0.08em]">Status</th>
+            <thead className="sticky top-0 bg-[var(--om-bg-primary)] z-10">
+              <tr className="border-b border-[var(--om-border)]">
+                <th className="text-left px-4 py-2 text-[10px] text-[var(--om-text-muted)] font-semibold uppercase tracking-[0.08em]">File</th>
+                <th className="text-left px-3 py-2 text-[10px] text-[var(--om-text-muted)] font-semibold uppercase tracking-[0.08em]">Type</th>
+                <th className="text-right px-3 py-2 text-[10px] text-[var(--om-text-muted)] font-semibold uppercase tracking-[0.08em]">Records</th>
+                <th className="text-left px-3 py-2 text-[10px] text-[var(--om-text-muted)] font-semibold uppercase tracking-[0.08em]">Ingested</th>
+                <th className="text-left px-3 py-2 text-[10px] text-[var(--om-text-muted)] font-semibold uppercase tracking-[0.08em]">Status</th>
                 <th className="px-2 py-2" />
               </tr>
             </thead>
             <tbody>
               {sources.map((src) => (
-                <tr key={src.id} className="border-b border-zinc-800/40 hover:bg-zinc-800/20 transition-colors">
-                  <td className="px-4 py-2 text-zinc-200 font-medium truncate" title={src.name}>{src.name}</td>
-                  <td className="px-3 py-2 text-zinc-300 truncate">{src.type_name}</td>
-                  <td className="px-3 py-2 text-right text-zinc-300 font-[family-name:var(--font-mono)]">{src.row_count}</td>
-                  <td className="px-3 py-2 text-zinc-400 font-[family-name:var(--font-mono)]">
+                <tr key={src.id} className="border-b border-[var(--om-border)] hover:bg-[var(--om-bg-hover)] transition-colors">
+                  <td className="px-4 py-2 text-[var(--om-text-primary)] font-medium truncate" title={src.name}>{src.name}</td>
+                  <td className="px-3 py-2 text-[var(--om-text-secondary)] truncate">{src.type_name}</td>
+                  <td className="px-3 py-2 text-right text-[var(--om-text-secondary)] font-[family-name:var(--font-mono)]">{src.row_count}</td>
+                  <td className="px-3 py-2 text-[var(--om-text-secondary)] font-[family-name:var(--font-mono)]">
                     {formatDate(src.ingested_at)}
                   </td>
                   <td className="px-3 py-2">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-medium ${
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[10px] font-medium ${
                       src.status === "ingested"
                         ? "bg-emerald-500/10 text-emerald-400"
                         : "bg-red-500/10 text-red-400"
@@ -301,7 +301,7 @@ export function SourcesView({ onIngestComplete }: SourcesViewProps) {
                     <button
                       onClick={() => handleDelete(src.id, src.name)}
                       disabled={deletingId === src.id}
-                      className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-40"
+                      className="p-1 rounded-sm text-[var(--om-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-40"
                       title="Delete source"
                     >
                       {deletingId === src.id ? (

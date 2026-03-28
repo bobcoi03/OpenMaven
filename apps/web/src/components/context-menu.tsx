@@ -45,8 +45,8 @@ function MenuItem({
 }) {
   const colors =
     variant === "danger"
-      ? "text-red-400 hover:bg-red-500/10"
-      : "text-zinc-300 hover:bg-zinc-700/50";
+      ? "text-[var(--om-red-light)] hover:bg-[var(--om-red)]/10"
+      : "text-[var(--om-text-secondary)] hover:bg-[var(--om-bg-hover)]";
 
   return (
     <button
@@ -96,11 +96,11 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
       <div
         ref={menuRef}
         style={style}
-        className="min-w-[160px] bg-[#1a1a1f] border border-zinc-700/80 rounded-lg shadow-xl overflow-hidden"
+        className="min-w-[160px] bg-[var(--om-bg-elevated)] border border-[var(--om-border-strong)] rounded-sm shadow-xl overflow-hidden"
       >
         {/* Header */}
-        <div className="px-3 py-1.5 bg-[#141417] border-b border-zinc-700/60">
-          <div className="text-[10px] font-semibold text-cyan-400 tracking-wide">
+        <div className="px-3 py-1.5 bg-[var(--om-bg-primary)] border-b border-[var(--om-border)]">
+          <div className="text-[10px] font-semibold text-[var(--om-blue-light)] tracking-wide">
             {asset.callsign}
           </div>
         </div>
@@ -113,7 +113,7 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
           />
           {asset.weapons.length > 0 && (
             <div className="px-1">
-              <div className="px-2 pt-1.5 pb-0.5 text-[9px] text-zinc-600 uppercase tracking-[0.1em]">
+              <div className="px-2 pt-1.5 pb-0.5 text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em]">
                 Strike with
               </div>
               {asset.weapons.map((weapon) => (
@@ -149,11 +149,11 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
       <div
         ref={menuRef}
         style={style}
-        className="min-w-[180px] bg-[#1a1a1f] border border-zinc-700/80 rounded-lg shadow-xl overflow-hidden"
+        className="min-w-[180px] bg-[var(--om-bg-elevated)] border border-[var(--om-border-strong)] rounded-sm shadow-xl overflow-hidden"
       >
         {/* Header */}
-        <div className="px-3 py-1.5 bg-[#141417] border-b border-zinc-700/60">
-          <div className="text-[9px] text-zinc-500 font-mono">
+        <div className="px-3 py-1.5 bg-[var(--om-bg-primary)] border-b border-[var(--om-border)]">
+          <div className="text-[9px] text-[var(--om-text-muted)] font-mono">
             {lngLat.lat.toFixed(4)}, {lngLat.lng.toFixed(4)}
           </div>
         </div>
@@ -172,7 +172,7 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
               }
             />
           ) : (
-            <div className="px-3 py-1.5 text-[10px] text-zinc-600">
+            <div className="px-3 py-1.5 text-[10px] text-[var(--om-text-muted)]">
               Select an asset first
             </div>
           )}

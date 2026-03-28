@@ -181,7 +181,7 @@ export default function MapPage() {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col bg-[#09090b] overflow-hidden">
+    <div className="flex-1 flex flex-col bg-[var(--om-bg-deep)] overflow-hidden">
       {/* ── Simulation Controls ─────────────────────────────────────── */}
       <SimulationControls
         connected={sim.connected}
@@ -217,11 +217,11 @@ export default function MapPage() {
         {/* Move-mode indicator */}
         {moveMode && (
           <div
-            className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded text-[10px] font-semibold"
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded-sm text-[10px] font-semibold"
             style={{
-              background: "rgba(6,182,212,0.15)",
-              border: "1px solid rgba(6,182,212,0.4)",
-              color: "#22d3ee",
+              background: "rgba(45,114,210,0.15)",
+              border: "1px solid rgba(45,114,210,0.4)",
+              color: "var(--om-blue-light)",
               backdropFilter: "blur(4px)",
             }}
           >
@@ -232,13 +232,13 @@ export default function MapPage() {
                 </span>
                 <button
                   onClick={handleConfirmMove}
-                  className="px-2 py-0.5 bg-cyan-500/20 border border-cyan-500/40 rounded hover:bg-cyan-500/30 cursor-pointer transition-colors"
+                  className="px-2 py-0.5 bg-[var(--om-blue)]/20 border border-[var(--om-blue)]/40 rounded-sm hover:bg-[var(--om-blue)]/30 cursor-pointer transition-colors"
                 >
                   Confirm
                 </button>
                 <button
                   onClick={handleCancelMove}
-                  className="text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                  className="text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -248,7 +248,7 @@ export default function MapPage() {
                 Click map to set destination
                 <button
                   onClick={handleCancelMove}
-                  className="text-zinc-400 hover:text-zinc-200 cursor-pointer ml-1"
+                  className="text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] cursor-pointer ml-1"
                 >
                   Cancel
                 </button>
@@ -261,26 +261,19 @@ export default function MapPage() {
         <div className="absolute top-2 left-2 z-20 flex gap-1.5">
           {(["Military", "Infrastructure", "Logistics"] as const).map((cls) => {
             const count = visibleAssets.filter((a) => a.asset_class === cls).length;
-            const color =
-              cls === "Military" ? "#00d4ff" :
-              cls === "Infrastructure" ? "#f59e0b" : "#94a3b8";
             if (!visibleLayers.has(cls)) return null;
             return (
               <div
                 key={cls}
-                className="flex items-center gap-1 px-2 py-1 rounded text-[9px] font-semibold font-mono"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-[9px] font-mono"
                 style={{
-                  background: "rgba(8,13,24,0.85)",
-                  border: `1px solid ${color}40`,
-                  color,
+                  background: "rgba(30,34,41,0.85)",
+                  border: "1px solid var(--om-border)",
                   backdropFilter: "blur(4px)",
                 }}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ background: color }}
-                />
-                {count.toLocaleString()}
+                <span className="font-semibold text-[var(--om-text-primary)]">{count}</span>
+                <span className="text-[var(--om-text-muted)]">{cls}</span>
               </div>
             );
           })}
@@ -289,8 +282,8 @@ export default function MapPage() {
         {/* Top-right HUD: map style toggle */}
         <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
           <div
-            className="flex rounded overflow-hidden text-[9px] font-semibold"
-            style={{ background: "rgba(8,13,24,0.85)", border: "1px solid #27272a", backdropFilter: "blur(4px)" }}
+            className="flex rounded-sm overflow-hidden text-[9px] font-semibold"
+            style={{ background: "rgba(30,34,41,0.85)", border: "1px solid var(--om-border)", backdropFilter: "blur(4px)" }}
           >
             {MAP_STYLES.map(({ id, label }) => (
               <button
@@ -298,8 +291,8 @@ export default function MapPage() {
                 onClick={() => setMapStyle(id)}
                 className={`px-2.5 py-1 cursor-pointer transition-colors ${
                   mapStyle === id
-                    ? "bg-cyan-500/20 text-cyan-300"
-                    : "text-zinc-600 hover:text-zinc-300"
+                    ? "bg-[var(--om-blue)]/20 text-[var(--om-blue-light)]"
+                    : "text-[var(--om-text-muted)] hover:text-[var(--om-text-secondary)]"
                 }`}
               >
                 {label}

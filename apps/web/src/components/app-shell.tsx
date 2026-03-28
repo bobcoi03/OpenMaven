@@ -12,8 +12,6 @@ import type { ObjectInstance } from "@/lib/api-types";
 import { MOCK_TACTICAL_ASSETS, type AssetClass } from "@/lib/tactical-mock";
 import {
   Search,
-  Filter,
-  Network,
   Map as MapIcon,
   MessageSquare,
   Table,
@@ -49,13 +47,15 @@ const TABS = [
   { name: "Design", href: "/design", icon: Layers },
 ] as const;
 
+// Fallback entity-type colors for search results — uses design system categorical palette
 const TYPE_COLORS: Record<string, string> = {
-  company: "#06b6d4",
-  founder: "#a78bfa",
-  industry: "#f59e0b",
-  batch: "#10b981",
-  location: "#f87171",
+  company: "#147EB3",
+  founder: "#9D3F9D",
+  industry: "#D1980B",
+  batch: "#00A396",
+  location: "#D33D17",
 };
+
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -76,13 +76,11 @@ interface ToolStep {
 
 const LAYER_CFG: {
   id: AssetClass;
-  color: string;
-  bg: string;
   description: string;
 }[] = [
-  { id: "Military",       color: "#00d4ff", bg: "rgba(0,212,255,0.08)",  description: "Armour · Air · Infantry" },
-  { id: "Infrastructure", color: "#f59e0b", bg: "rgba(245,158,11,0.08)", description: "Oil · Power · Bridges"  },
-  { id: "Logistics",      color: "#94a3b8", bg: "rgba(148,163,184,0.08)",description: "Supply · Air Transport"  },
+  { id: "Military",       description: "Armour · Air · Infantry" },
+  { id: "Infrastructure", description: "Oil · Power · Bridges"  },
+  { id: "Logistics",      description: "Supply · Air Transport"  },
 ];
 
 // ── Tool labels ──────────────────────────────────────────────────────────────
@@ -116,45 +114,45 @@ function ToolStepRow({ step }: { step: ToolStep }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded border border-zinc-800/60 bg-zinc-900/30 overflow-hidden">
+    <div className="rounded-sm border border-[var(--om-border)] bg-[var(--om-bg-deep)]/30 overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1.5 px-2 py-1 text-left cursor-pointer hover:bg-zinc-800/30 transition-colors"
+        className="w-full flex items-center gap-1.5 px-2 py-1 text-left cursor-pointer hover:bg-[var(--om-bg-hover)]/30 transition-colors"
       >
         {step.status === "running" && (
-          <Loader2 size={10} className="animate-spin text-cyan-500 shrink-0" />
+          <Loader2 size={10} className="animate-spin text-[var(--om-blue)] shrink-0" />
         )}
         {step.status === "complete" && (
-          <CheckCircle2 size={10} className="text-emerald-500 shrink-0" />
+          <CheckCircle2 size={10} className="text-[var(--om-green)] shrink-0" />
         )}
         {step.status === "error" && (
-          <XCircle size={10} className="text-red-500 shrink-0" />
+          <XCircle size={10} className="text-[var(--om-red)] shrink-0" />
         )}
-        <span className="text-[10px] text-zinc-400 flex-1 truncate">
+        <span className="text-[10px] text-[var(--om-text-secondary)] flex-1 truncate">
           {getToolLabel(step.name, step.status)}
         </span>
         {(step.args || step.preview) && (
           <ChevronDown
             size={10}
-            className={`text-zinc-600 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+            className={`text-[var(--om-text-muted)] shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
           />
         )}
       </button>
       {open && (
-        <div className="px-2 py-1.5 border-t border-zinc-800/40 text-[9px] font-mono text-zinc-500 max-h-24 overflow-y-auto">
+        <div className="px-2 py-1.5 border-t border-[var(--om-border)] text-[9px] font-mono text-[var(--om-text-muted)] max-h-24 overflow-y-auto">
           {step.args && Object.keys(step.args).length > 0 && (
             <div className="mb-1">
-              <span className="text-zinc-600">args: </span>
+              <span className="text-[var(--om-text-disabled)]">args: </span>
               {Object.entries(step.args).map(([k, v]) => (
                 <span key={k} className="mr-2">
-                  <span className="text-zinc-500">{k}=</span>
-                  <span className="text-cyan-600">{JSON.stringify(v)}</span>
+                  <span className="text-[var(--om-text-muted)]">{k}=</span>
+                  <span className="text-[var(--om-blue)]">{JSON.stringify(v)}</span>
                 </span>
               ))}
             </div>
           )}
           {step.preview && (
-            <div className="text-zinc-500 break-words">{step.preview}</div>
+            <div className="text-[var(--om-text-muted)] break-words">{step.preview}</div>
           )}
         </div>
       )}
@@ -175,12 +173,12 @@ function ToolStepGroup({ steps, live = false }: { steps: ToolStep[]; live?: bool
     <div className="mb-2">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center gap-1.5 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer mb-1"
+        className="flex items-center gap-1.5 text-[10px] text-[var(--om-text-muted)] hover:text-[var(--om-text-primary)] transition-colors cursor-pointer mb-1"
       >
         {live && !allDone ? (
-          <Loader2 size={10} className="animate-spin text-cyan-500" />
+          <Loader2 size={10} className="animate-spin text-[var(--om-blue)]" />
         ) : (
-          <CheckCircle2 size={10} className="text-emerald-600" />
+          <CheckCircle2 size={10} className="text-[var(--om-green)]" />
         )}
         <span>
           {live && !allDone
@@ -193,7 +191,7 @@ function ToolStepGroup({ steps, live = false }: { steps: ToolStep[]; live?: bool
         />
       </button>
       {!collapsed && (
-        <div className="ml-1 border-l-2 border-zinc-800/60 pl-2 space-y-1">
+        <div className="ml-1 border-l-2 border-[var(--om-border)] pl-2 space-y-1">
           {steps.map((step) => (
             <ToolStepRow key={step.id} step={step} />
           ))}
@@ -206,7 +204,7 @@ function ToolStepGroup({ steps, live = false }: { steps: ToolStep[]; live?: bool
 // ── AppShell ──────────────────────────────────────────────────────────────────
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { entityCounts, graph } = useAppData();
+  const { graph } = useAppData();
   const { visibleLayers, toggleLayer, selectedAsset, setSelectedAsset } = useMapLayers();
   const pathname = usePathname();
   const router = useRouter();
@@ -385,28 +383,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#09090b] text-zinc-200">
+    <div className="h-full flex flex-col bg-[var(--om-bg-deep)] text-[var(--om-text-primary)]">
       {/* ── Top Bar ─────────────────────────────────────────────────── */}
-      <header className="h-10 flex items-center justify-between px-3 bg-[#141417] border-b border-[#27272a] shrink-0 z-20">
+      <header className="h-9 flex items-center justify-between px-3 bg-[var(--om-bg-elevated)] border-b border-[var(--om-border)] shrink-0 z-20">
         <div className="flex items-center gap-3">
-          <span className="text-[11px] font-semibold text-zinc-100 tracking-[0.18em] uppercase">
+          <span className="text-[11px] font-semibold text-[var(--om-text-primary)] tracking-[0.14em] uppercase">
             OpenMaven
           </span>
-          <div className="w-px h-4 bg-[#27272a]" />
+          <div className="w-px h-4 bg-[var(--om-border)]" />
           <nav className="flex gap-0.5">
             {TABS.map(({ name, href, icon: Icon }) => {
               const active = pathname === href;
-              const isTactical = href === "/map";
               return (
                 <Link
                   key={name}
                   href={href}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded font-medium tracking-wide transition-colors ${
-                    active && isTactical
-                      ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/25"
-                      : active
-                      ? "bg-white/8 text-zinc-100 border border-white/10"
-                      : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5 border border-transparent"
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-sm tracking-wide transition-colors ${
+                    active
+                      ? "bg-[var(--om-blue)]/15 text-[var(--om-text-primary)] font-semibold"
+                      : "text-[var(--om-text-muted)] hover:text-[var(--om-text-primary)] font-normal"
                   }`}
                 >
                   <Icon size={12} />
@@ -418,9 +413,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="flex items-center gap-2" ref={searchRef}>
           <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--om-text-muted)]" />
             {isSearching && (
-              <Loader2 size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 animate-spin" />
+              <Loader2 size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--om-text-muted)] animate-spin" />
             )}
             <input
               type="text"
@@ -431,13 +426,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onFocus={() => {
                 if (searchResults.length > 0) setShowResults(true);
               }}
-              className="pl-7 pr-3 py-1 text-[11px] rounded bg-[#141417]/80 border border-zinc-800/80 text-zinc-300 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600 w-56"
+              className="pl-7 pr-3 py-1 text-[11px] rounded-sm bg-[var(--om-bg-surface)] border border-[var(--om-border)] text-[var(--om-text-primary)] placeholder:text-[var(--om-text-disabled)] focus:outline-none focus:border-[var(--om-border-strong)] w-56"
             />
             {/* Search dropdown */}
             {showResults && (
-              <div className="absolute top-full right-0 mt-1 w-80 bg-[#1a1a1f] border border-zinc-800 rounded-lg shadow-xl overflow-hidden z-50">
+              <div className="absolute top-full right-0 mt-1 w-80 bg-[var(--om-bg-elevated)] border border-[var(--om-border-strong)] rounded-sm shadow-xl overflow-hidden z-50">
                 {searchResults.length === 0 ? (
-                  <div className="px-3 py-4 text-center text-[11px] text-zinc-500">
+                  <div className="px-3 py-4 text-center text-[11px] text-[var(--om-text-muted)]">
                     No results for &quot;{searchQuery}&quot;
                   </div>
                 ) : (
@@ -451,19 +446,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           onClick={() => handleSelectResult(obj)}
                           className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors cursor-pointer ${
                             i === selectedIndex
-                              ? "bg-zinc-800/80"
-                              : "hover:bg-zinc-800/40"
+                              ? "bg-[var(--om-bg-active)]"
+                              : "hover:bg-[var(--om-bg-hover)]"
                           }`}
                         >
                           <div
                             className="w-2 h-2 rounded-full shrink-0"
                             style={{ background: color }}
                           />
-                          <span className="text-[11px] text-zinc-200 truncate flex-1">
+                          <span className="text-[11px] text-[var(--om-text-primary)] truncate flex-1">
                             {title}
                           </span>
                           <span
-                            className="text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0"
+                            className="text-[9px] px-1.5 py-0.5 rounded-sm font-medium shrink-0"
                             style={{ background: `${color}20`, color }}
                           >
                             {obj.type}
@@ -481,132 +476,88 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Main Content ────────────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Sidebar — Map Layers (on /map) or Entity Types (other pages) */}
-        <aside className="w-[240px] bg-[#141417] border-r border-[#27272a] flex flex-col shrink-0 z-10 overflow-y-auto">
-          {pathname === "/map" ? (
-            /* ── Tactical Map Layers ───────────────────────────────── */
-            <>
-              {/* Selected asset detail (rendered at top of sidebar) */}
-              {selectedAsset && (
-                <AssetDetailPanel
-                  asset={selectedAsset}
-                  onClose={() => setSelectedAsset(null)}
-                />
-              )}
-
-              <div className="px-3 py-2.5 border-b border-[#27272a]">
-                <div className="flex items-center gap-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
-                  <Layers size={11} />
-                  Map Layers
-                </div>
-              </div>
-
-              {/* Layer toggles */}
-              <div className="px-2 py-2 space-y-1">
-                {LAYER_CFG.map(({ id, color, bg, description }) => {
-                  const isOn = visibleLayers.has(id);
-                  const count = MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === id).length;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => toggleLayer(id)}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded transition-all cursor-pointer group"
-                      style={{
-                        background: isOn ? bg : "transparent",
-                        border: `1px solid ${isOn ? color + "30" : "#27272a"}`,
-                        opacity: isOn ? 1 : 0.45,
-                      }}
-                    >
-                      {/* Toggle indicator */}
-                      <div
-                        className="w-3 h-3 rounded-sm shrink-0 flex items-center justify-center transition-all"
-                        style={{
-                          background: isOn ? color : "transparent",
-                          border: `1.5px solid ${color}`,
-                        }}
-                      >
-                        {isOn && (
-                          <svg width="7" height="5" viewBox="0 0 7 5" fill="none">
-                            <polyline points="1,2.5 3,4.5 6,1" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        )}
-                      </div>
-
-                      <div className="flex-1 text-left min-w-0">
-                        <div className="text-[11px] font-semibold truncate" style={{ color: isOn ? color : "#64748b" }}>
-                          {id}
-                        </div>
-                        <div className="text-[9px] text-zinc-600">{description}</div>
-                      </div>
-
-                      <span
-                        className="text-[10px] font-mono shrink-0"
-                        style={{ color: isOn ? color + "bb" : "#334155" }}
-                      >
-                        {count.toLocaleString()}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Theatre info */}
-              <div className="mt-auto px-3 py-3 border-t border-[#27272a]">
-                <div className="text-[9px] text-zinc-600 uppercase tracking-[0.1em] mb-2">
-                  Theatre of Operations
-                </div>
-                <div className="space-y-1">
-                  {[
-                    ["Area",   "E. Syria / W. Iraq"],
-                    ["Assets", MOCK_TACTICAL_ASSETS.length.toLocaleString()],
-                    ["Lat",    "29°N – 37°N"],
-                    ["Lon",    "38°E – 48°E"],
-                  ].map(([k, v]) => (
-                    <div key={k} className="flex items-baseline justify-between">
-                      <span className="text-[9px] text-zinc-700 uppercase tracking-[0.08em]">{k}</span>
-                      <span className="text-[9px] text-zinc-500 font-mono">{v}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            /* ── Entity Types (all other pages) ───────────────────── */
-            <>
-              <div className="px-3 py-2.5 border-b border-zinc-800/60">
-                <div className="flex items-center gap-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
-                  <Filter size={11} />
-                  Entity Types
-                </div>
-              </div>
-              {entityCounts.length === 0 ? (
-                <div className="px-3 py-6 text-center">
-                  <p className="text-[11px] text-zinc-500">No data yet</p>
-                  <p className="text-[10px] text-zinc-600 mt-1">Upload files in the Sources tab</p>
-                </div>
-              ) : (
-                <div className="px-3 py-2 space-y-1.5">
-                  {entityCounts.map(({ type, count, color }) => {
-                    const maxCount = entityCounts[0]?.count || 1;
-                    const pct = (count / maxCount) * 100;
-                    return (
-                      <div key={type} className="flex items-center gap-2 group">
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-                        <span className="text-[11px] text-zinc-300 w-[80px] truncate">{type}</span>
-                        <div className="flex-1 h-2.5 bg-zinc-900/80 rounded overflow-hidden">
-                          <div
-                            className="h-full rounded"
-                            style={{ width: `${Math.min(pct, 100)}%`, background: color, opacity: 0.5 }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-zinc-500 w-8 text-right font-[family-name:var(--font-mono)]">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
+        {/* Left Sidebar — Map Layers + Theatre info */}
+        <aside className="w-[240px] bg-[var(--om-bg-elevated)] border-r border-[var(--om-border)] flex flex-col shrink-0 z-10 overflow-y-auto">
+          {/* Selected asset detail (rendered at top of sidebar on /map) */}
+          {pathname === "/map" && selectedAsset && (
+            <AssetDetailPanel
+              asset={selectedAsset}
+              onClose={() => setSelectedAsset(null)}
+            />
           )}
+
+          <div className="px-3 py-2 border-b border-[var(--om-border)]">
+            <div className="flex items-center gap-2 text-[10px] font-semibold text-[var(--om-text-primary)] uppercase tracking-[0.12em]">
+              <Layers size={11} />
+              Map Layers
+            </div>
+          </div>
+
+          {/* Layer toggles */}
+          <div className="px-2 py-2 space-y-1">
+            {LAYER_CFG.map(({ id, description }) => {
+              const isOn = visibleLayers.has(id);
+              const count = MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === id).length;
+              return (
+                <button
+                  key={id}
+                  onClick={() => toggleLayer(id)}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm transition-all cursor-pointer"
+                  style={{
+                    background: isOn ? "var(--om-bg-surface)" : "transparent",
+                    border: `1px solid ${isOn ? "var(--om-border-strong)" : "var(--om-border)"}`,
+                    opacity: isOn ? 1 : 0.45,
+                  }}
+                >
+                  {/* Toggle indicator */}
+                  <div
+                    className="w-3 h-3 rounded-sm shrink-0 flex items-center justify-center transition-all"
+                    style={{
+                      background: isOn ? "var(--om-blue)" : "transparent",
+                      border: `1.5px solid ${isOn ? "var(--om-blue)" : "var(--om-text-muted)"}`,
+                    }}
+                  >
+                    {isOn && (
+                      <svg width="7" height="5" viewBox="0 0 7 5" fill="none">
+                        <polyline points="1,2.5 3,4.5 6,1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+
+                  <div className="flex-1 text-left min-w-0">
+                    <div className={`text-[11px] font-semibold truncate ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-muted)]"}`}>
+                      {id}
+                    </div>
+                    <div className="text-[9px] text-[var(--om-text-muted)]">{description}</div>
+                  </div>
+
+                  <span className={`text-[10px] font-mono shrink-0 ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-disabled)]"}`}>
+                    {count.toLocaleString()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Theatre info */}
+          <div className="mt-auto px-3 py-3 border-t border-[var(--om-border)]">
+            <div className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em] mb-2">
+              Theatre of Operations
+            </div>
+            <div className="space-y-1">
+              {[
+                ["Area",   "E. Syria / W. Iraq"],
+                ["Assets", MOCK_TACTICAL_ASSETS.length.toLocaleString()],
+                ["Lat",    "29°N – 37°N"],
+                ["Lon",    "38°E – 48°E"],
+              ].map(([k, v]) => (
+                <div key={k} className="flex items-baseline justify-between">
+                  <span className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.08em]">{k}</span>
+                  <span className="text-[9px] text-[var(--om-text-primary)] font-mono">{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </aside>
 
         {/* Center Canvas */}
@@ -615,10 +566,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Right Panel — AI Query */}
-        <aside className="w-[300px] bg-[#141417] border-l border-[#27272a] flex flex-col shrink-0 z-10">
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-zinc-800/60">
-            <Sparkles size={13} className="text-zinc-400" />
-            <span className="text-[11px] font-semibold text-zinc-300 tracking-wide">Query</span>
+        <aside className="w-[300px] bg-[var(--om-bg-elevated)] border-l border-[var(--om-border)] flex flex-col shrink-0 z-10">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--om-border)]">
+            <Sparkles size={13} className="text-[var(--om-text-muted)]" />
+            <span className="text-[11px] font-semibold text-[var(--om-text-primary)] tracking-wide">Query</span>
           </div>
 
           {/* Messages area */}
@@ -626,12 +577,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {messages.length === 0 ? (
               <div className="space-y-4 pt-2">
                 <div className="flex items-center gap-2 mb-3">
-                  <Bot size={14} className="text-cyan-500" />
-                  <span className="text-[11px] font-semibold text-zinc-300">
+                  <Bot size={14} className="text-[var(--om-blue)]" />
+                  <span className="text-[11px] font-semibold text-[var(--om-text-primary)]">
                     {isMapRoute ? "C2 Operator" : "Knowledge Graph Agent"}
                   </span>
                 </div>
-                <p className="text-[10px] text-zinc-500 leading-[1.6]">
+                <p className="text-[10px] text-[var(--om-text-secondary)] leading-[1.6]">
                   {isMapRoute
                     ? "Tactical AI assistant with live access to the simulation."
                     : "AI assistant with access to your knowledge graph."}
@@ -653,12 +604,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   ).map(({ icon: Icon, label, desc }) => (
                     <div
                       key={label}
-                      className="flex items-start gap-2.5 px-2.5 py-2 border border-zinc-800/60 bg-zinc-900/40"
+                      className="flex items-start gap-2.5 px-2.5 py-2 border border-[var(--om-border)] bg-[var(--om-bg-deep)]/40"
                     >
-                      <Icon size={13} className="text-zinc-500 shrink-0 mt-0.5" />
+                      <Icon size={13} className="text-[var(--om-text-secondary)] shrink-0 mt-0.5" />
                       <div className="min-w-0">
-                        <div className="text-[10px] font-medium text-zinc-300">{label}</div>
-                        <div className="text-[9px] text-zinc-600">{desc}</div>
+                        <div className="text-[10px] font-medium text-[var(--om-text-primary)]">{label}</div>
+                        <div className="text-[9px] text-[var(--om-text-muted)]">{desc}</div>
                       </div>
                     </div>
                   ))}
@@ -669,9 +620,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <div key={i} className="flex gap-2">
                   <div className="shrink-0 mt-0.5">
                     {msg.role === "user" ? (
-                      <User size={12} className="text-zinc-500" />
+                      <User size={12} className="text-[var(--om-text-muted)]" />
                     ) : (
-                      <Bot size={12} className="text-cyan-500" />
+                      <Bot size={12} className="text-[var(--om-blue)]" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -679,7 +630,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     {msg.role === "assistant" && msg.toolSteps && msg.toolSteps.length > 0 && (
                       <ToolStepGroup steps={msg.toolSteps} />
                     )}
-                    <div className="text-[11px] text-zinc-300 leading-[1.6] break-words">
+                    <div className="text-[11px] text-[var(--om-text-primary)] leading-[1.6] break-words">
                       <ReactMarkdown
                         components={{
                           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
@@ -687,7 +638,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
                           li: ({ children }) => <li className="mb-1">{children}</li>,
                           code: ({ children }) => (
-                            <code className="px-1 py-0.5 rounded bg-zinc-800/80 text-zinc-200">
+                            <code className="px-1 py-0.5 rounded-sm bg-[var(--om-bg-active)]/80 text-[var(--om-text-primary)]">
                               {children}
                             </code>
                           ),
@@ -696,7 +647,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                               href={href}
                               target="_blank"
                               rel="noreferrer noopener"
-                              className="text-cyan-400 hover:text-cyan-300 underline"
+                              className="text-[var(--om-blue-light)] hover:text-[var(--om-blue)] underline"
                             >
                               {children}
                             </a>
@@ -717,7 +668,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 graph.seedNode(s.rid);
                                 if (pathname !== "/graph") router.push("/graph");
                               }}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium hover:opacity-80 transition-opacity cursor-pointer"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[9px] font-medium hover:opacity-80 transition-opacity cursor-pointer"
                               style={{ background: `${color}15`, color }}
                             >
                               {s.name}
@@ -733,14 +684,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* In-progress tool steps */}
             {isQuerying && (
               <div className="flex gap-2">
-                <Bot size={12} className="text-cyan-500 shrink-0 mt-0.5" />
+                <Bot size={12} className="text-[var(--om-blue)] shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   {toolSteps.length > 0 ? (
                     <ToolStepGroup steps={toolSteps} live />
                   ) : (
                     <div className="flex items-center gap-2">
-                      <Loader2 size={12} className="animate-spin text-zinc-500" />
-                      <span className="text-[10px] text-zinc-500">Thinking...</span>
+                      <Loader2 size={12} className="animate-spin text-[var(--om-text-muted)]" />
+                      <span className="text-[10px] text-[var(--om-text-muted)]">Thinking...</span>
                     </div>
                   )}
                 </div>
@@ -750,8 +701,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Input */}
-          <div className="px-3 py-2.5 border-t border-zinc-800/60">
-            <div className="bg-zinc-900/80 border border-zinc-800/80 focus-within:border-zinc-600 transition-colors">
+          <div className="px-3 py-2.5 border-t border-[var(--om-border)]">
+            <div className="bg-[var(--om-bg-surface)] border border-[var(--om-border)] focus-within:border-[var(--om-border-strong)] transition-colors rounded-sm">
               <textarea
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
@@ -763,14 +714,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 }}
                 placeholder={isMapRoute ? "Ask about the battlefield..." : "Ask about the knowledge graph..."}
                 rows={1}
-                className="w-full px-3 pt-2 pb-1 text-[11px] text-zinc-300 placeholder:text-zinc-600 bg-transparent border-none outline-none resize-none leading-[1.6]"
+                className="w-full px-3 pt-2 pb-1 text-[11px] text-[var(--om-text-primary)] placeholder:text-[var(--om-text-disabled)] bg-transparent border-none outline-none resize-none leading-[1.6]"
                 style={{ minHeight: "28px", maxHeight: "120px", fieldSizing: "content" } as React.CSSProperties}
               />
               <div className="flex justify-end px-2 pb-1.5">
                 <button
                   onClick={handleQuerySubmit}
                   disabled={isQuerying || !queryText.trim()}
-                  className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                  className="p-1.5 text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] hover:bg-[var(--om-bg-hover)] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
                 >
                   <Send size={12} />
                 </button>
@@ -781,34 +732,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* ── Bottom Status Bar ───────────────────────────────────────── */}
-      <footer className="h-7 flex items-center gap-4 px-3 bg-[#141417] border-t border-[#27272a] shrink-0 z-20 overflow-hidden">
-        {pathname === "/map" ? (
-          /* Tactical status line */
-          <>
-            {(["Military", "Infrastructure", "Logistics"] as const).map((cls) => {
-              const color =
-                cls === "Military" ? "#00d4ff" :
-                cls === "Infrastructure" ? "#f59e0b" : "#94a3b8";
-              const count = MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === cls).length;
-              return (
-                <div key={cls} className="flex items-center gap-1.5 text-[10px] shrink-0">
-                  <Circle size={7} fill={color} stroke="none" />
-                  <span className="font-semibold font-[family-name:var(--font-mono)]" style={{ color }}>{count}</span>
-                  <span className="text-zinc-500">{cls}</span>
-                </div>
-              );
-            })}
-          </>
-        ) : (
-          entityCounts.map(({ type, count, color }) => (
-            <div key={type} className="flex items-center gap-1.5 text-[10px] text-zinc-400 shrink-0 max-w-[180px]">
-              <Circle size={8} fill={color} stroke="none" className="shrink-0" />
-              <span className="font-semibold font-[family-name:var(--font-mono)]" style={{ color }}>{count}</span>
-              <span className="truncate">{type}</span>
-            </div>
-          ))
-        )}
-        <div className="ml-auto text-[10px] text-zinc-700 font-[family-name:var(--font-mono)] shrink-0">
+      <footer className="h-7 flex items-center gap-4 px-3 bg-[var(--om-bg-elevated)] border-t border-[var(--om-border)] shrink-0 z-20 overflow-hidden">
+        {[
+          { label: "BLUFOR", count: MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === "Military").length, color: "var(--om-friendly)" },
+          { label: "INFRA", count: MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === "Infrastructure").length, color: "var(--om-orange)" },
+          { label: "LOGI", count: MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === "Logistics").length, color: "var(--om-text-secondary)" },
+        ].map((item) => (
+          <div key={item.label} className="flex items-center gap-1.5 text-[10px] shrink-0">
+            <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: item.color }} />
+            <span className="font-semibold font-[family-name:var(--font-mono)]" style={{ color: item.color }}>{item.count}</span>
+            <span className="text-[var(--om-text-muted)]">{item.label}</span>
+          </div>
+        ))}
+        <div className="ml-auto text-[10px] text-[var(--om-text-muted)] font-[family-name:var(--font-mono)] shrink-0">
           v0.1.0
         </div>
       </footer>

@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
+  --font-sans: var(--om-font-sans);
   --font-mono: var(--font-mono);
-  --font-heading: var(--font-inter);
+  --font-heading: var(--om-font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -84,37 +84,80 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* ── OpenMaven Design Tokens ──────────────────────────────────────────── */
+
+  /* Surfaces */
+  --om-bg-deep: #1E2229;
+  --om-bg-primary: #252A31;
+  --om-bg-elevated: #2D323A;
+  --om-bg-surface: #353B44;
+  --om-bg-hover: #3D434C;
+  --om-bg-active: #474E58;
+
+  /* Borders */
+  --om-border: rgba(255,255,255,0.08);
+  --om-border-strong: rgba(255,255,255,0.14);
+  --om-border-focus: rgba(45,114,210,0.6);
+
+  /* Text */
+  --om-text-primary: #E2E8F0;
+  --om-text-secondary: #94A3B8;
+  --om-text-muted: #64748B;
+  --om-text-disabled: #475569;
+
+  /* Accents */
+  --om-blue: #2D72D2;
+  --om-blue-light: #4C90F0;
+  --om-red: #CD4246;
+  --om-red-light: #E76A6E;
+  --om-green: #238551;
+  --om-green-light: #32A467;
+  --om-orange: #C87619;
+  --om-orange-light: #EC9A3C;
+
+  /* Force affiliation colors */
+  --om-friendly: #00A8DC;
+  --om-hostile: #FF3031;
+  --om-neutral: #00E200;
+  --om-unknown: #FFFF00;
+
+  /* Font */
+  --om-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+
+  /* ── shadcn overrides ─────────────────────────────────────────────────── */
+
+  --background: #1E2229;
+  --foreground: #E2E8F0;
+  --card: #252A31;
+  --card-foreground: #E2E8F0;
+  --popover: #252A31;
+  --popover-foreground: #E2E8F0;
+  --primary: #2D72D2;
+  --primary-foreground: #FFFFFF;
+  --secondary: #2D323A;
+  --secondary-foreground: #E2E8F0;
+  --muted: #2D323A;
+  --muted-foreground: #94A3B8;
+  --accent: #2D323A;
+  --accent-foreground: #E2E8F0;
+  --destructive: #CD4246;
+  --border: rgba(255,255,255,0.08);
+  --input: rgba(255,255,255,0.10);
+  --ring: #2D72D2;
+  --radius: 2px;
+  --chart-1: #2D72D2;
+  --chart-2: #238551;
+  --chart-3: #C87619;
+  --chart-4: #CD4246;
+  --chart-5: #7C3AED;
+  --sidebar: #252A31;
+  --sidebar-foreground: #E2E8F0;
+  --sidebar-primary: #2D72D2;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #2D323A;
+  --sidebar-accent-foreground: #E2E8F0;
+  --sidebar-border: rgba(255,255,255,0.08);
+  --sidebar-ring: #2D72D2;
 }
 
 @layer base {
@@ -131,34 +174,34 @@
   /* Dark scrollbars */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #27272a #09090b;
+    scrollbar-color: var(--om-bg-active) var(--om-bg-deep);
   }
   *::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
   *::-webkit-scrollbar-track {
-    background: #09090b;
+    background: var(--om-bg-deep);
   }
   *::-webkit-scrollbar-thumb {
-    background: #27272a;
+    background: var(--om-bg-active);
     border-radius: 3px;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: #3f3f46;
+    background: #5A6270;
   }
 
   /* Dark MapLibre popups */
   .maplibregl-popup-content {
-    background: #141417 !important;
-    border: 1px solid #27272a !important;
-    border-radius: 4px !important;
+    background: var(--om-bg-primary) !important;
+    border: 1px solid var(--om-border) !important;
+    border-radius: 2px !important;
     padding: 6px 8px !important;
     box-shadow: 0 4px 16px rgba(0,0,0,0.7) !important;
   }
   .maplibregl-popup-tip {
-    border-top-color: #141417 !important;
-    border-bottom-color: #141417 !important;
+    border-top-color: var(--om-bg-primary) !important;
+    border-bottom-color: var(--om-bg-primary) !important;
   }
 
   /* Tactical map marker pulse — applied to CRITICAL infrastructure */
@@ -178,11 +221,11 @@
 
   /* MapLibre attribution — keep it minimal */
   .maplibregl-ctrl-attrib {
-    background: rgba(10, 14, 26, 0.75) !important;
-    color: #475569 !important;
+    background: rgba(30, 34, 41, 0.75) !important;
+    color: var(--om-text-disabled) !important;
     font-size: 9px !important;
   }
   .maplibregl-ctrl-attrib a {
-    color: #64748b !important;
+    color: var(--om-text-muted) !important;
   }
 }

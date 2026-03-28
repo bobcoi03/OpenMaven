@@ -199,7 +199,7 @@ export function MapViewInner({
         const label = document.createElement("div");
         label.textContent = asset.callsign;
         label.style.cssText =
-          "font-size:8px;font-family:'Inter',system-ui,monospace;font-weight:600;" +
+          "font-size:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,monospace;font-weight:600;" +
           "color:#d4d4d8;text-shadow:0 1px 3px rgba(0,0,0,0.9);" +
           "white-space:nowrap;margin-top:1px;letter-spacing:0.03em;pointer-events:none;";
         el.appendChild(label);
@@ -327,7 +327,7 @@ export function MapViewInner({
           type: "line",
           source: SOURCE_ID,
           paint: {
-            "line-color": "#22d3ee",
+            "line-color": "#2D72D2",
             "line-width": 2,
             "line-dasharray": [4, 3],
             "line-opacity": 0.7,
@@ -339,8 +339,8 @@ export function MapViewInner({
       if (!destMarkerRef.current) {
         const el = document.createElement("div");
         el.style.cssText =
-          "width:14px;height:14px;border:2px solid #22d3ee;border-radius:50%;" +
-          "background:rgba(6,182,212,0.2);cursor:grab;box-shadow:0 0 6px rgba(6,182,212,0.5);";
+          "width:14px;height:14px;border:2px solid #2D72D2;border-radius:50%;" +
+          "background:rgba(45,114,210,0.2);cursor:grab;box-shadow:0 0 6px rgba(45,114,210,0.5);";
         const marker = new maplibregl.Marker({ element: el, draggable: true })
           .setLngLat(movePath.to)
           .addTo(map);

@@ -167,6 +167,28 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
       return;
     }
 
+    if (msg.type === "strike_result") {
+      const data = msg.data ?? msg;
+      const targetId = data.target_id as string;
+      const targetStatus = data.target_status as string;
+      const targetHealth = data.target_health as number | undefined;
+      if (targetId) {
+        setAssets((prev) => {
+          const asset = prev[targetId];
+          if (!asset) return prev;
+          return {
+            ...prev,
+            [targetId]: {
+              ...asset,
+              status: targetStatus ?? asset.status,
+              health: targetHealth ?? (targetStatus === "destroyed" ? 0 : asset.health),
+            },
+          };
+        });
+      }
+      return;
+    }
+
     if (msg.type === "speed_changed") {
       setSpeedState(msg.speed);
       return;

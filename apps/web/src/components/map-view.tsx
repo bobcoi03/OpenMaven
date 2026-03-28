@@ -38,8 +38,8 @@ const MapViewInner = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full flex items-center justify-center bg-[#0a0e1a]">
-        <span className="text-[11px] text-slate-600 tracking-widest uppercase">
+      <div className="w-full h-full flex items-center justify-center bg-[var(--om-bg-deep)]">
+        <span className="text-[11px] text-[var(--om-text-muted)] tracking-widest uppercase">
           Initialising map…
         </span>
       </div>

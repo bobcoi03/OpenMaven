@@ -17,7 +17,7 @@ interface GraphViewProps {
 const GraphViewInner = dynamic(() => import("./graph-view-inner").then((m) => m.GraphViewInner), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-[#09090b] text-zinc-600 text-xs">
+    <div className="w-full h-full flex items-center justify-center bg-[var(--om-bg-deep)] text-[var(--om-text-muted)] text-xs">
       Loading graph...
     </div>
   ),

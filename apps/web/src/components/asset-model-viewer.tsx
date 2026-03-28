@@ -19,7 +19,7 @@ interface AssetModelViewerProps {
 function LoadingFallback() {
   return (
     <Html center>
-      <div className="flex items-center gap-2 text-zinc-500">
+      <div className="flex items-center gap-2 text-[var(--om-text-muted)]">
         <Loader2 size={14} className="animate-spin" />
         <span className="text-[11px]">Loading model...</span>
       </div>
@@ -97,7 +97,7 @@ function CompassRose({ heading, cameraAzimuth }: { heading: number; cameraAzimut
       <svg viewBox="0 0 96 96" className="w-full h-full">
         {/* Background */}
         <circle cx="48" cy="48" r="44" fill="rgba(0,0,0,0.6)" />
-        <circle cx="48" cy="48" r="44" fill="none" stroke="#27272a" strokeWidth="1" />
+        <circle cx="48" cy="48" r="44" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
 
         {/* Rotating group — cardinal directions rotate with camera */}
         <g transform={`rotate(${-cameraAzimuth}, 48, 48)`}>
@@ -149,7 +149,7 @@ function CompassRose({ heading, cameraAzimuth }: { heading: number; cameraAzimut
             y1="48"
             x2={48 + 22 * Math.sin((heading * Math.PI) / 180)}
             y2={48 - 22 * Math.cos((heading * Math.PI) / 180)}
-            stroke="#00d4ff"
+            stroke="#2D72D2"
             strokeWidth="2"
             strokeLinecap="round"
           />
@@ -159,7 +159,7 @@ function CompassRose({ heading, cameraAzimuth }: { heading: number; cameraAzimut
             cx={48 + 22 * Math.sin((heading * Math.PI) / 180)}
             cy={48 - 22 * Math.cos((heading * Math.PI) / 180)}
             r="2.5"
-            fill="#00d4ff"
+            fill="#2D72D2"
           />
         </g>
 
@@ -172,14 +172,14 @@ function CompassRose({ heading, cameraAzimuth }: { heading: number; cameraAzimut
         />
 
         {/* Center dot */}
-        <circle cx="48" cy="48" r="2" fill="#00d4ff" opacity="0.6" />
+        <circle cx="48" cy="48" r="2" fill="#2D72D2" opacity="0.6" />
 
         {/* Heading readout */}
         <text
           x="48"
           y="64"
           textAnchor="middle"
-          fill="#00d4ff"
+          fill="#2D72D2"
           fontSize="8"
           fontFamily="monospace"
           fontWeight="600"
@@ -206,17 +206,17 @@ export function AssetModelViewer({ modelPath, heading, pitch = 0, roll = 0, embe
       + "autostart=1&transparent=1&ui_theme=dark&ui_controls=1&ui_infos=0&ui_watermark_link=0&ui_watermark=0";
 
     return (
-      <div className="relative w-full h-full bg-[#0a0a0f] rounded-none overflow-hidden border border-[#27272a]">
+      <div className="relative w-full h-full bg-[var(--om-bg-deep)] rounded-none overflow-hidden border border-[var(--om-border)]">
         <iframe
           title="Asset 3D Model"
           src={src}
           className="w-full h-full"
           allow="autoplay; fullscreen; xr-spatial-tracking"
           allowFullScreen
-          style={{ border: "none", background: "#0a0a0f" }}
+          style={{ border: "none", background: "#1E2229" }}
         />
         <CompassRose heading={heading} cameraAzimuth={0} />
-        <div className="absolute bottom-3 right-3 text-[9px] text-zinc-700 italic">
+        <div className="absolute bottom-3 right-3 text-[9px] text-[var(--om-text-disabled)] italic">
           Notional model — may not reflect actual asset type
         </div>
       </div>
@@ -225,7 +225,7 @@ export function AssetModelViewer({ modelPath, heading, pitch = 0, roll = 0, embe
 
   // Local GLB mode
   return (
-    <div className="relative w-full h-full bg-[#0a0a0f] rounded-none overflow-hidden border border-[#27272a]">
+    <div className="relative w-full h-full bg-[var(--om-bg-deep)] rounded-none overflow-hidden border border-[var(--om-border)]">
       <Canvas
         camera={{ position: [5, 2.5, 5], fov: 45, near: 0.01, far: 1000 }}
         gl={{ antialias: true }}
@@ -253,12 +253,12 @@ export function AssetModelViewer({ modelPath, heading, pitch = 0, roll = 0, embe
 
       {/* Navigation instructions */}
       <div className="absolute bottom-3 right-3 flex flex-col items-end gap-1">
-        <div className="flex items-center gap-3 text-[9px] text-zinc-600">
-          <span><span className="text-zinc-500">Left drag</span> Orbit</span>
-          <span><span className="text-zinc-500">Right drag</span> Pan</span>
-          <span><span className="text-zinc-500">Scroll</span> Zoom</span>
+        <div className="flex items-center gap-3 text-[9px] text-[var(--om-text-muted)]">
+          <span><span className="text-[var(--om-text-muted)]">Left drag</span> Orbit</span>
+          <span><span className="text-[var(--om-text-muted)]">Right drag</span> Pan</span>
+          <span><span className="text-[var(--om-text-muted)]">Scroll</span> Zoom</span>
         </div>
-        <span className="text-[9px] text-zinc-700 italic">
+        <span className="text-[9px] text-[var(--om-text-disabled)] italic">
           Notional model — may not reflect actual asset type
         </span>
       </div>

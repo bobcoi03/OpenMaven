@@ -16,11 +16,11 @@ interface GraphViewProps {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  company: "#06b6d4",
-  founder: "#a78bfa",
-  industry: "#f59e0b",
-  batch: "#10b981",
-  location: "#f87171",
+  company: "#147EB3",
+  founder: "#9D3F9D",
+  industry: "#D1980B",
+  batch: "#00A396",
+  location: "#D33D17",
 };
 
 const TYPE_SIZES: Record<string, number> = {
@@ -69,7 +69,7 @@ export function GraphViewInner({
       id: n.id,
       label: n.label,
       type: n.type,
-      color: TYPE_COLORS[n.type?.toLowerCase()] ?? n.color ?? "#a1a1aa",
+      color: TYPE_COLORS[n.type?.toLowerCase()] ?? n.color ?? "#94A3B8",
     }));
 
     const links: GraphLink[] = rawEdges
@@ -167,17 +167,17 @@ export function GraphViewInner({
       ctx.fill();
 
       if (isSelected) {
-        ctx.strokeStyle = "#ffffff";
+        ctx.strokeStyle = "#E2E8F0";
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
 
       // Label
       const fontSize = node.type === "industry" || node.type === "batch" ? 4 : 3.2;
-      ctx.font = `${isSelected ? "bold " : ""}${fontSize}px Inter, sans-serif`;
+      ctx.font = `${isSelected ? "bold " : ""}${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      ctx.fillStyle = isSelected ? "#ffffff" : "#d4d4d8";
+      ctx.fillStyle = isSelected ? "#E2E8F0" : "#94A3B8";
       ctx.fillText(node.label, x, y + size + 2);
     },
     [selectedId, expandedNodes, loadingNode],
@@ -191,7 +191,7 @@ export function GraphViewInner({
           graphData={graphData}
           width={dimensions.width}
           height={dimensions.height}
-          backgroundColor="#09090b"
+          backgroundColor="#1E2229"
           nodeCanvasObject={drawNode}
           nodePointerAreaPaint={(node: GraphNode, color, ctx) => {
             const size = TYPE_SIZES[node.type?.toLowerCase()] ?? 5;
@@ -202,7 +202,7 @@ export function GraphViewInner({
           }}
           onNodeClick={handleNodeClick}
           onNodeRightClick={handleNodeRightClick}
-          linkColor={() => "#27272a"}
+          linkColor={() => "rgba(255,255,255,0.08)"}
           linkWidth={0.5}
           d3AlphaDecay={0.03}
           d3VelocityDecay={0.3}

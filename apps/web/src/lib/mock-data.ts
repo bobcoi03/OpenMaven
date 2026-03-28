@@ -223,11 +223,11 @@ export const batches = ["W24", "S23", "W23", "S22", "W22"];
 // ─── Graph Data ──────────────────────────────────────────────────────────────
 
 const nodeColors: Record<string, string> = {
-  company: "#a1a1aa",   // zinc-400
-  founder: "#71717a",   // zinc-500
-  industry: "#d4d4d8",  // zinc-300
-  batch: "#52525b",     // zinc-600
-  location: "#e4e4e7",  // zinc-200
+  company: "#147EB3",   // cerulean
+  founder: "#9D3F9D",   // violet
+  industry: "#D1980B",  // gold
+  batch: "#00A396",     // turquoise
+  location: "#D33D17",  // vermilion
 };
 
 export const graphNodes: GraphNode[] = [
@@ -287,12 +287,12 @@ export const graphEdges: GraphEdge[] = [
 // ─── Entity Counts ───────────────────────────────────────────────────────────
 
 export const entityCounts: EntityCount[] = [
-  { type: "Companies", count: 20, color: "#06b6d4", icon: "Building2" },
-  { type: "Founders", count: 13, color: "#a78bfa", icon: "Users" },
-  { type: "Industries", count: 15, color: "#f59e0b", icon: "Tags" },
-  { type: "Locations", count: 16, color: "#f87171", icon: "MapPin" },
-  { type: "Batches", count: 5, color: "#10b981", icon: "Calendar" },
-  { type: "Job Postings", count: 34, color: "#38bdf8", icon: "Briefcase" },
+  { type: "Companies", count: 20, color: "#147EB3", icon: "Building2" },
+  { type: "Founders", count: 13, color: "#9D3F9D", icon: "Users" },
+  { type: "Industries", count: 15, color: "#D1980B", icon: "Tags" },
+  { type: "Locations", count: 16, color: "#D33D17", icon: "MapPin" },
+  { type: "Batches", count: 5, color: "#00A396", icon: "Calendar" },
+  { type: "Job Postings", count: 34, color: "#2D72D2", icon: "Briefcase" },
 ];
 
 // ─── Source Types ────────────────────────────────────────────────────────────

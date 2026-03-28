@@ -7,6 +7,7 @@ import {
   type Decision,
   type DecisionStage,
 } from "@/lib/mock-data";
+import type { LucideIcon } from "lucide-react";
 import {
   Search,
   Plus,
@@ -25,15 +26,15 @@ import {
 } from "lucide-react";
 
 const stageConfig: Record<DecisionStage, { label: string; color: string; border: string; count?: number }> = {
-  Proposed: { label: "PROPOSED", color: "text-zinc-400", border: "border-l-zinc-500" },
+  Proposed: { label: "PROPOSED", color: "text-[var(--om-text-secondary)]", border: "border-l-[var(--om-text-muted)]" },
   "Under Review": { label: "UNDER REVIEW", color: "text-amber-400", border: "border-l-amber-500" },
-  Approved: { label: "APPROVED", color: "text-blue-400", border: "border-l-blue-500" },
-  "In Execution": { label: "IN EXECUTION", color: "text-cyan-400", border: "border-l-cyan-500" },
+  Approved: { label: "APPROVED", color: "text-[var(--om-blue-light)]", border: "border-l-[var(--om-blue)]" },
+  "In Execution": { label: "IN EXECUTION", color: "text-[var(--om-blue-light)]", border: "border-l-[var(--om-blue)]" },
   Complete: { label: "COMPLETE", color: "text-emerald-400", border: "border-l-emerald-500" },
-  Rejected: { label: "REJECTED", color: "text-red-400", border: "border-l-red-500" },
+  Rejected: { label: "REJECTED", color: "text-[var(--om-red-light)]", border: "border-l-[var(--om-red)]" },
 };
 
-const stageIcons: Record<DecisionStage, React.ElementType> = {
+const stageIcons: Record<DecisionStage, LucideIcon> = {
   Proposed: CircleDot,
   "Under Review": Timer,
   Approved: CheckCircle2,
@@ -43,10 +44,10 @@ const stageIcons: Record<DecisionStage, React.ElementType> = {
 };
 
 const priorityConfig: Record<string, { dot: string; text: string }> = {
-  Critical: { dot: "bg-red-400", text: "text-red-400" },
+  Critical: { dot: "bg-[var(--om-red)]", text: "text-[var(--om-red-light)]" },
   High: { dot: "bg-amber-400", text: "text-amber-400" },
-  Medium: { dot: "bg-blue-400", text: "text-blue-400" },
-  Low: { dot: "bg-zinc-500", text: "text-zinc-400" },
+  Medium: { dot: "bg-[var(--om-blue)]", text: "text-[var(--om-blue-light)]" },
+  Low: { dot: "bg-[var(--om-text-muted)]", text: "text-[var(--om-text-secondary)]" },
 };
 
 const stageOrder: DecisionStage[] = ["Proposed", "Under Review", "Approved", "In Execution", "Complete", "Rejected"];
@@ -86,33 +87,33 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
   const selectedDecision = decisions.find((d) => d.id === selectedId);
 
   return (
-    <div className="h-full flex bg-[#09090b]">
+    <div className="h-full flex bg-[var(--om-bg-deep)]">
       {/* Kanban Board */}
       <div className="flex-1 flex flex-col">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800/80 bg-[#141417]">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--om-border)] bg-[var(--om-bg-primary)]">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--om-text-muted)]" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search decisions..."
-                className="pl-7 pr-3 py-1.5 text-[11px] rounded bg-zinc-900/80 border border-zinc-800/80 text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 w-52"
+                className="pl-7 pr-3 py-1.5 text-[11px] rounded-sm bg-[var(--om-bg-deep)]/80 border border-[var(--om-border-strong)] text-[var(--om-text-secondary)] placeholder:text-[var(--om-text-disabled)] focus:outline-none focus:border-[var(--om-text-muted)] w-52"
               />
             </div>
-            <button className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 rounded transition-colors cursor-pointer">
+            <button className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] hover:bg-[var(--om-bg-hover)] rounded-sm transition-colors cursor-pointer">
               <Filter size={11} />
               Filter
             </button>
-            <button className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 rounded transition-colors cursor-pointer">
+            <button className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] hover:bg-[var(--om-bg-hover)] rounded-sm transition-colors cursor-pointer">
               <ArrowUpDown size={11} />
               Sort by
               <ChevronDown size={10} />
             </button>
           </div>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-zinc-200 bg-zinc-800 border border-zinc-700/60 rounded hover:bg-zinc-700 transition-colors cursor-pointer">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-[var(--om-text-primary)] bg-[var(--om-bg-elevated)] border border-[var(--om-border-strong)] rounded-sm hover:bg-[var(--om-bg-hover)] transition-colors cursor-pointer">
             <Plus size={11} />
             Add Decision
           </button>
@@ -129,15 +130,15 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
               return (
                 <div
                   key={stage}
-                  className="flex flex-col w-[220px] border-r border-zinc-800/60 last:border-r-0"
+                  className="flex flex-col w-[220px] border-r border-[var(--om-border)] last:border-r-0"
                 >
                   {/* Column header */}
-                  <div className="flex items-center gap-2 px-3 py-2.5 bg-[#111114] border-b border-zinc-800/60">
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-[var(--om-bg-elevated)] border-b border-[var(--om-border)]">
                     <StageIcon size={12} className={conf.color} />
                     <span className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${conf.color}`}>
                       {conf.label}
                     </span>
-                    <span className="ml-auto text-[10px] text-zinc-600 font-[family-name:var(--font-mono)]">
+                    <span className="ml-auto text-[10px] text-[var(--om-text-muted)] font-[family-name:var(--font-mono)]">
                       {stageDecs.length}
                     </span>
                   </div>
@@ -155,18 +156,18 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
                         <div
                           key={dec.id}
                           onClick={() => handleSelect(dec)}
-                          className={`border-l-2 ${stageConfig[dec.stage].border} bg-[#141417] border border-zinc-800/60 rounded-r px-3 py-2.5 cursor-pointer transition-all hover:border-zinc-700/80 ${
-                            isSelected ? "ring-1 ring-zinc-600 bg-white/[0.03]" : ""
+                          className={`border-l-2 ${stageConfig[dec.stage].border} bg-[var(--om-bg-primary)] border border-[var(--om-border)] rounded-r-sm px-3 py-2.5 cursor-pointer transition-all hover:border-[var(--om-border-strong)] ${
+                            isSelected ? "ring-1 ring-[var(--om-text-muted)] bg-white/[0.03]" : ""
                           }`}
                         >
                           {/* Priority + Type */}
                           <div className="flex items-center gap-2 mb-1.5">
                             <span className={`w-1.5 h-1.5 rounded-full ${pri.dot}`} />
-                            <span className="text-[9px] text-zinc-500 uppercase tracking-[0.1em] font-semibold">{dec.type}</span>
+                            <span className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em] font-semibold">{dec.type}</span>
                           </div>
 
                           {/* Title */}
-                          <div className="text-[11px] text-zinc-200 font-medium leading-snug mb-1.5">
+                          <div className="text-[11px] text-[var(--om-text-primary)] font-medium leading-snug mb-1.5">
                             {dec.title}
                           </div>
 
@@ -176,13 +177,13 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
                               {linkedCompanies.slice(0, 2).map((c) => (
                                 <span
                                   key={c!.id}
-                                  className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800/60 text-zinc-400 border border-zinc-800/40"
+                                  className="text-[9px] px-1.5 py-0.5 rounded-sm bg-[var(--om-bg-elevated)] text-[var(--om-text-secondary)] border border-[var(--om-border)]"
                                 >
                                   {c!.name}
                                 </span>
                               ))}
                               {linkedCompanies.length > 2 && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800/60 text-zinc-500">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-[var(--om-bg-elevated)] text-[var(--om-text-muted)]">
                                   +{linkedCompanies.length - 2}
                                 </span>
                               )}
@@ -192,14 +193,14 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
                           {/* Footer: assignee + time */}
                           <div className="flex items-center justify-between mt-1">
                             <div className="flex items-center gap-1.5">
-                              <User size={9} className="text-zinc-600" />
-                              <span className="text-[9px] text-zinc-500">
+                              <User size={9} className="text-[var(--om-text-muted)]" />
+                              <span className="text-[9px] text-[var(--om-text-muted)]">
                                 {dec.assignee === "unassigned" ? "Unassigned" : dec.assignee}
                               </span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <Clock size={9} className="text-zinc-600" />
-                              <span className="text-[9px] text-zinc-500 font-[family-name:var(--font-mono)]">
+                              <Clock size={9} className="text-[var(--om-text-muted)]" />
+                              <span className="text-[9px] text-[var(--om-text-muted)] font-[family-name:var(--font-mono)]">
                                 {timeAgo(dec.updatedAt)}
                               </span>
                             </div>
@@ -209,7 +210,7 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
                     })}
 
                     {stageDecs.length === 0 && (
-                      <div className="flex items-center justify-center h-20 text-[10px] text-zinc-700">
+                      <div className="flex items-center justify-center h-20 text-[10px] text-[var(--om-text-disabled)]">
                         No items
                       </div>
                     )}
@@ -223,9 +224,9 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
 
       {/* Detail sidebar */}
       {selectedDecision && (
-        <div className="w-[300px] bg-[#141417] border-l border-zinc-800/80 flex flex-col shrink-0 overflow-y-auto">
+        <div className="w-[300px] bg-[var(--om-bg-primary)] border-l border-[var(--om-border)] flex flex-col shrink-0 overflow-y-auto">
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800/60">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--om-border)]">
             <div className="flex items-center gap-2">
               {(() => {
                 const StIcon = stageIcons[selectedDecision.stage];
@@ -237,7 +238,7 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
             </div>
             <button
               onClick={() => setSelectedId(null)}
-              className="text-zinc-600 hover:text-zinc-300 transition-colors p-0.5 cursor-pointer"
+              className="text-[var(--om-text-muted)] hover:text-[var(--om-text-secondary)] transition-colors p-0.5 cursor-pointer"
             >
               <X size={14} />
             </button>
@@ -251,38 +252,38 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
                 {selectedDecision.priority} Priority
               </span>
             </div>
-            <h2 className="text-[13px] font-semibold text-zinc-100 leading-snug">{selectedDecision.title}</h2>
-            <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded bg-zinc-800/60 text-zinc-400 border border-zinc-800/40">
+            <h2 className="text-[13px] font-semibold text-[var(--om-text-primary)] leading-snug">{selectedDecision.title}</h2>
+            <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-sm bg-[var(--om-bg-elevated)] text-[var(--om-text-secondary)] border border-[var(--om-border)]">
               {selectedDecision.type}
             </span>
           </div>
 
           {/* Description */}
           <div className="px-3 pb-3">
-            <p className="text-[11px] text-zinc-300 leading-[1.6]">{selectedDecision.description}</p>
+            <p className="text-[11px] text-[var(--om-text-secondary)] leading-[1.6]">{selectedDecision.description}</p>
           </div>
 
           {/* Properties */}
-          <div className="border-t border-zinc-800/60">
-            <div className="px-3 py-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
+          <div className="border-t border-[var(--om-border)]">
+            <div className="px-3 py-2 text-[10px] font-semibold text-[var(--om-text-secondary)] uppercase tracking-[0.12em]">
               Properties
             </div>
             <div className="px-3 pb-3 space-y-2.5">
               <div className="flex items-baseline justify-between">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-[0.08em]">Assignee</span>
-                <span className="text-[11px] text-zinc-300">{selectedDecision.assignee === "unassigned" ? "—" : selectedDecision.assignee}</span>
+                <span className="text-[10px] text-[var(--om-text-muted)] uppercase tracking-[0.08em]">Assignee</span>
+                <span className="text-[11px] text-[var(--om-text-secondary)]">{selectedDecision.assignee === "unassigned" ? "—" : selectedDecision.assignee}</span>
               </div>
               <div className="flex items-baseline justify-between">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-[0.08em]">Created</span>
-                <span className="text-[11px] text-zinc-300 font-[family-name:var(--font-mono)]">{timeAgo(selectedDecision.createdAt)}</span>
+                <span className="text-[10px] text-[var(--om-text-muted)] uppercase tracking-[0.08em]">Created</span>
+                <span className="text-[11px] text-[var(--om-text-secondary)] font-[family-name:var(--font-mono)]">{timeAgo(selectedDecision.createdAt)}</span>
               </div>
               <div className="flex items-baseline justify-between">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-[0.08em]">Updated</span>
-                <span className="text-[11px] text-zinc-300 font-[family-name:var(--font-mono)]">{timeAgo(selectedDecision.updatedAt)}</span>
+                <span className="text-[10px] text-[var(--om-text-muted)] uppercase tracking-[0.08em]">Updated</span>
+                <span className="text-[11px] text-[var(--om-text-secondary)] font-[family-name:var(--font-mono)]">{timeAgo(selectedDecision.updatedAt)}</span>
               </div>
               {selectedDecision.approvedBy && (
                 <div className="flex items-baseline justify-between">
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-[0.08em]">Approved By</span>
+                  <span className="text-[10px] text-[var(--om-text-muted)] uppercase tracking-[0.08em]">Approved By</span>
                   <span className="text-[11px] text-emerald-400">{selectedDecision.approvedBy}</span>
                 </div>
               )}
@@ -291,8 +292,8 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
 
           {/* Linked Entities */}
           {selectedDecision.entities.length > 0 && (
-            <div className="border-t border-zinc-800/60">
-              <div className="px-3 py-2 text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
+            <div className="border-t border-[var(--om-border)]">
+              <div className="px-3 py-2 text-[10px] font-semibold text-[var(--om-text-secondary)] uppercase tracking-[0.12em]">
                 Linked Entities
               </div>
               <div className="px-3 pb-3 space-y-1">
@@ -302,14 +303,14 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
                   return (
                     <div
                       key={eid}
-                      className="flex items-center gap-2 px-2 py-1.5 bg-zinc-900/40 rounded border border-zinc-800/40 cursor-pointer hover:bg-zinc-800/40 transition-colors"
+                      className="flex items-center gap-2 px-2 py-1.5 bg-[var(--om-bg-deep)]/40 rounded-sm border border-[var(--om-border)] cursor-pointer hover:bg-[var(--om-bg-hover)] transition-colors"
                     >
-                      <div className="w-5 h-5 rounded bg-zinc-800 border border-zinc-700/50 flex items-center justify-center text-[9px] text-zinc-400 font-semibold">
+                      <div className="w-5 h-5 rounded-sm bg-[var(--om-bg-elevated)] border border-[var(--om-border-strong)] flex items-center justify-center text-[9px] text-[var(--om-text-secondary)] font-semibold">
                         {c.name[0]}
                       </div>
                       <div>
-                        <div className="text-[11px] text-zinc-300">{c.name}</div>
-                        <div className="text-[9px] text-zinc-500">{c.industry} · {c.batch}</div>
+                        <div className="text-[11px] text-[var(--om-text-secondary)]">{c.name}</div>
+                        <div className="text-[9px] text-[var(--om-text-muted)]">{c.industry} · {c.batch}</div>
                       </div>
                     </div>
                   );
@@ -319,27 +320,27 @@ export function DecisionsView({ onDecisionSelect }: DecisionsViewProps) {
           )}
 
           {/* Actions */}
-          <div className="mt-auto px-3 py-2.5 border-t border-zinc-800/60 space-y-1.5">
+          <div className="mt-auto px-3 py-2.5 border-t border-[var(--om-border)] space-y-1.5">
             {selectedDecision.stage === "Proposed" && (
-              <button className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded hover:bg-amber-500/20 transition-colors cursor-pointer">
+              <button className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-sm hover:bg-amber-500/20 transition-colors cursor-pointer">
                 <AlertTriangle size={11} />
                 Move to Review
               </button>
             )}
             {selectedDecision.stage === "Under Review" && (
-              <button className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer">
+              <button className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-sm hover:bg-emerald-500/20 transition-colors cursor-pointer">
                 <CheckCircle2 size={11} />
                 Approve
               </button>
             )}
             {selectedDecision.stage === "Approved" && (
-              <button className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 rounded hover:bg-cyan-500/10 transition-colors cursor-pointer">
+              <button className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-[var(--om-blue-light)] bg-[var(--om-blue)]/10 border border-[var(--om-blue)]/20 rounded-sm hover:bg-[var(--om-blue)]/20 transition-colors cursor-pointer">
                 <Zap size={11} />
                 Begin Execution
               </button>
             )}
             {selectedDecision.stage === "In Execution" && (
-              <button className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer">
+              <button className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-sm hover:bg-emerald-500/20 transition-colors cursor-pointer">
                 <CheckCircle2 size={11} />
                 Mark Complete
               </button>

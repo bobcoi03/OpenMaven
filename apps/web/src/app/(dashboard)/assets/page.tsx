@@ -406,408 +406,51 @@ const MOCK_ASSETS: AssetTelemetry[] = [
     mgrs: "38SLH 46100 60200",
   },
   // ── Drones (Sketchfab embed) ──
-  {
-    asset_id: "a24",
-    callsign: "HIVE-03",
-    asset_type: "Hovering Recon Drone",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/eac2b4bc20f54b3ba8c3ddbcdf03c8d6/embed",
-    latitude: 34.3500,
-    longitude: 40.8200,
-    altitude_m: 150,
-    heading_deg: 210.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 35,
-    status: "ACTIVE",
-    sensor_type: "EO/IR Gimbal",
-    mgrs: "38SLH 44800 61200",
-  },
+  { asset_id: "a24", callsign: "HIVE-03", asset_type: "Hovering Recon Drone", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/eac2b4bc20f54b3ba8c3ddbcdf03c8d6/embed", latitude: 34.3500, longitude: 40.8200, altitude_m: 150, heading_deg: 210.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 35, status: "ACTIVE", sensor_type: "EO/IR Gimbal", mgrs: "38SLH 44800 61200" },
   // ── Infantry (Sketchfab embed) ──
-  {
-    asset_id: "a25",
-    callsign: "BRAVO-2-1",
-    asset_type: "Infantry Squad",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/22ddacc2fa6b4f67b975169c548dbd70/embed",
-    latitude: 34.1950,
-    longitude: 40.7800,
-    altitude_m: 320,
-    heading_deg: 145.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 5,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "38SLH 42800 61500",
-  },
+  { asset_id: "a25", callsign: "BRAVO-2-1", asset_type: "Infantry Squad", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/22ddacc2fa6b4f67b975169c548dbd70/embed", latitude: 34.1950, longitude: 40.7800, altitude_m: 320, heading_deg: 145.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 5, status: "ACTIVE", sensor_type: null, mgrs: "38SLH 42800 61500" },
   // ── Air Defense / SAM Systems (Sketchfab embeds) ──
-  {
-    asset_id: "a26",
-    callsign: "GROWLER-01",
-    asset_type: "S-400 Triumf SAM",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/1a109bdd906149249dce0a18cdfbe708/embed",
-    latitude: 35.4200,
-    longitude: 40.1500,
-    altitude_m: 410,
-    heading_deg: 0.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 0,
-    status: "ACTIVE",
-    sensor_type: "91N6E Radar",
-    mgrs: "37SFV 88200 22400",
-  },
-  {
-    asset_id: "a27",
-    callsign: "PATRIOT-01",
-    asset_type: "MIM-104 Patriot",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/2e1160a3f61b44f29859269b5312c834/embed",
-    latitude: 34.7300,
-    longitude: 41.0800,
-    altitude_m: 285,
-    heading_deg: 315.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 0,
-    status: "ACTIVE",
-    sensor_type: "AN/MPQ-53 Radar",
-    mgrs: "38SLH 49100 62300",
-  },
-  {
-    asset_id: "a28",
-    callsign: "IRON-DOME-02",
-    asset_type: "Iron Dome Defense System",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/4c9aab0f3c014274b921e0a8c3638eee/embed",
-    latitude: 34.5100,
-    longitude: 40.9200,
-    altitude_m: 195,
-    heading_deg: 90.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 0,
-    status: "ACTIVE",
-    sensor_type: "EL/M-2084 Radar",
-    mgrs: "38SLH 46300 60100",
-  },
+  { asset_id: "a26", callsign: "GROWLER-01", asset_type: "S-400 Triumf SAM", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/1a109bdd906149249dce0a18cdfbe708/embed", latitude: 35.4200, longitude: 40.1500, altitude_m: 410, heading_deg: 0.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 0, status: "ACTIVE", sensor_type: "91N6E Radar", mgrs: "37SFV 88200 22400" },
+  { asset_id: "a27", callsign: "PATRIOT-01", asset_type: "MIM-104 Patriot", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/2e1160a3f61b44f29859269b5312c834/embed", latitude: 34.7300, longitude: 41.0800, altitude_m: 285, heading_deg: 315.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 0, status: "ACTIVE", sensor_type: "AN/MPQ-53 Radar", mgrs: "38SLH 49100 62300" },
+  { asset_id: "a28", callsign: "IRON-DOME-02", asset_type: "Iron Dome Defense System", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/4c9aab0f3c014274b921e0a8c3638eee/embed", latitude: 34.5100, longitude: 40.9200, altitude_m: 195, heading_deg: 90.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 0, status: "ACTIVE", sensor_type: "EL/M-2084 Radar", mgrs: "38SLH 46300 60100" },
   // ── ISR / Intelligence Assets (Sketchfab embeds) ──
-  {
-    asset_id: "a29",
-    callsign: "HAWKEYE-01",
-    asset_type: "RQ-4 Global Hawk",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/dd87adcff26b46e58639e9256f5301c4/embed",
-    latitude: 36.1200,
-    longitude: 40.5500,
-    altitude_m: 18200,
-    heading_deg: 270.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 575,
-    status: "ACTIVE",
-    sensor_type: "EISS / MP-RTIP Radar",
-    mgrs: "37SFV 92100 30500",
-  },
-  {
-    asset_id: "a30",
-    callsign: "SENTRY-01",
-    asset_type: "E-3A AWACS",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/80164b1137494e468212730872738e12/embed",
-    latitude: 36.5000,
-    longitude: 41.2000,
-    altitude_m: 9100,
-    heading_deg: 180.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 720,
-    status: "ACTIVE",
-    sensor_type: "AN/APY-2 Radar",
-    mgrs: "38SMH 09200 48300",
-  },
+  { asset_id: "a29", callsign: "HAWKEYE-01", asset_type: "RQ-4 Global Hawk", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/dd87adcff26b46e58639e9256f5301c4/embed", latitude: 36.1200, longitude: 40.5500, altitude_m: 18200, heading_deg: 270.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 575, status: "ACTIVE", sensor_type: "EISS / MP-RTIP Radar", mgrs: "37SFV 92100 30500" },
+  { asset_id: "a30", callsign: "SENTRY-01", asset_type: "E-3A AWACS", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/80164b1137494e468212730872738e12/embed", latitude: 36.5000, longitude: 41.2000, altitude_m: 9100, heading_deg: 180.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 720, status: "ACTIVE", sensor_type: "AN/APY-2 Radar", mgrs: "38SMH 09200 48300" },
   // ── Artillery / Fire Support (Sketchfab embeds) ──
-  {
-    asset_id: "a31",
-    callsign: "THUNDER-01",
-    asset_type: "M777 Howitzer",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/a17c26dbc0394579b7072ae1faf7be34/embed",
-    latitude: 34.2800,
-    longitude: 40.6300,
-    altitude_m: 340,
-    heading_deg: 45.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 0,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "38SLH 41200 58900",
-  },
-  {
-    asset_id: "a32",
-    callsign: "STEEL-RAIN-01",
-    asset_type: "M142 HIMARS",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/53c53a112c674d29a2afdbddbe3cecb5/embed",
-    latitude: 34.4500,
-    longitude: 40.7100,
-    altitude_m: 290,
-    heading_deg: 330.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 0,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "38SLH 43100 60200",
-  },
-  {
-    asset_id: "a33",
-    callsign: "BASEPLATE-01",
-    asset_type: "M224 Mortar",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/c86a73e40d994431bcdb57dc741cf8be/embed",
-    latitude: 34.1800,
-    longitude: 40.8500,
-    altitude_m: 310,
-    heading_deg: 0.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 0,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "38SLH 44200 57800",
-  },
+  { asset_id: "a31", callsign: "THUNDER-01", asset_type: "M777 Howitzer", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/a17c26dbc0394579b7072ae1faf7be34/embed", latitude: 34.2800, longitude: 40.6300, altitude_m: 340, heading_deg: 45.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 0, status: "ACTIVE", sensor_type: null, mgrs: "38SLH 41200 58900" },
+  { asset_id: "a32", callsign: "STEEL-RAIN-01", asset_type: "M142 HIMARS", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/53c53a112c674d29a2afdbddbe3cecb5/embed", latitude: 34.4500, longitude: 40.7100, altitude_m: 290, heading_deg: 330.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 0, status: "ACTIVE", sensor_type: null, mgrs: "38SLH 43100 60200" },
+  { asset_id: "a33", callsign: "BASEPLATE-01", asset_type: "M224 Mortar", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/c86a73e40d994431bcdb57dc741cf8be/embed", latitude: 34.1800, longitude: 40.8500, altitude_m: 310, heading_deg: 0.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 0, status: "ACTIVE", sensor_type: null, mgrs: "38SLH 44200 57800" },
   // ── Logistics / Supply (Sketchfab embeds) ──
-  {
-    asset_id: "a34",
-    callsign: "ATLAS-01",
-    asset_type: "C-17 Globemaster III",
-    asset_class: "Logistics",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/2d9e934e129a4e048fd19b98328acd78/embed",
-    latitude: 35.8200,
-    longitude: 41.5000,
-    altitude_m: 8500,
-    heading_deg: 90.0,
-    pitch_deg: -2.5,
-    roll_deg: 0,
-    speed_kmh: 830,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "38SMH 22100 35600",
-  },
-  {
-    asset_id: "a35",
-    callsign: "SUPPLY-07",
-    asset_type: "M977 HEMTT Supply Truck",
-    asset_class: "Logistics",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/a124427dfe894948a1ffa985f26ea5cc/embed",
-    latitude: 34.3100,
-    longitude: 40.9500,
-    altitude_m: 270,
-    heading_deg: 120.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 55,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "38SLH 45600 59100",
-  },
-  {
-    asset_id: "a36",
-    callsign: "MEDIC-01",
-    asset_type: "Field Hospital",
-    asset_class: "Logistics",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/7820c7442e644a2eab396ec312fa3700/embed",
-    latitude: 34.6200,
-    longitude: 41.1500,
-    altitude_m: 220,
-    heading_deg: 0.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 0,
-    status: "OPERATIONAL",
-    sensor_type: null,
-    mgrs: "38SLH 48200 62100",
-  },
+  { asset_id: "a34", callsign: "ATLAS-01", asset_type: "C-17 Globemaster III", asset_class: "Logistics", model_path: null, embed_url: "https://sketchfab.com/models/2d9e934e129a4e048fd19b98328acd78/embed", latitude: 35.8200, longitude: 41.5000, altitude_m: 8500, heading_deg: 90.0, pitch_deg: -2.5, roll_deg: 0, speed_kmh: 830, status: "ACTIVE", sensor_type: null, mgrs: "38SMH 22100 35600" },
+  { asset_id: "a35", callsign: "SUPPLY-07", asset_type: "M977 HEMTT Supply Truck", asset_class: "Logistics", model_path: null, embed_url: "https://sketchfab.com/models/a124427dfe894948a1ffa985f26ea5cc/embed", latitude: 34.3100, longitude: 40.9500, altitude_m: 270, heading_deg: 120.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 55, status: "ACTIVE", sensor_type: null, mgrs: "38SLH 45600 59100" },
+  { asset_id: "a36", callsign: "MEDIC-01", asset_type: "Field Hospital", asset_class: "Logistics", model_path: null, embed_url: "https://sketchfab.com/models/7820c7442e644a2eab396ec312fa3700/embed", latitude: 34.6200, longitude: 41.1500, altitude_m: 220, heading_deg: 0.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 0, status: "OPERATIONAL", sensor_type: null, mgrs: "38SLH 48200 62100" },
   // ── Naval (expanded, Sketchfab embeds) ──
-  {
-    asset_id: "a37",
-    callsign: "SHADOW-01",
-    asset_type: "USS Seawolf SSN-21",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/90ebfc165a6148e38cb2d7245dc2cd48/embed",
-    latitude: 34.9000,
-    longitude: 35.2000,
-    altitude_m: -120,
-    heading_deg: 195.0,
-    pitch_deg: -3.0,
-    roll_deg: 0,
-    speed_kmh: 46,
-    status: "ACTIVE",
-    sensor_type: "BQQ-10 Sonar",
-    mgrs: "36SVF 55200 64100",
-  },
-  {
-    asset_id: "a38",
-    callsign: "GATOR-01",
-    asset_type: "USS Wasp LHD-1",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/8e68ca4a3b854b2f8f19b942ae944466/embed",
-    latitude: 34.7500,
-    longitude: 35.5000,
-    altitude_m: 0,
-    heading_deg: 270.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 37,
-    status: "ACTIVE",
-    sensor_type: "AN/SPS-52 Radar",
-    mgrs: "36SVF 58300 47200",
-  },
+  { asset_id: "a37", callsign: "SHADOW-01", asset_type: "USS Seawolf SSN-21", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/90ebfc165a6148e38cb2d7245dc2cd48/embed", latitude: 34.9000, longitude: 35.2000, altitude_m: -120, heading_deg: 195.0, pitch_deg: -3.0, roll_deg: 0, speed_kmh: 46, status: "ACTIVE", sensor_type: "BQQ-10 Sonar", mgrs: "36SVF 55200 64100" },
+  { asset_id: "a38", callsign: "GATOR-01", asset_type: "USS Wasp LHD-1", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/8e68ca4a3b854b2f8f19b942ae944466/embed", latitude: 34.7500, longitude: 35.5000, altitude_m: 0, heading_deg: 270.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 37, status: "ACTIVE", sensor_type: "AN/SPS-52 Radar", mgrs: "36SVF 58300 47200" },
   // ── Electronic Warfare (Sketchfab embeds) ──
-  {
-    asset_id: "a39",
-    callsign: "JAMMER-01",
-    asset_type: "EW Radar Vehicle",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/f954fdaf89054d2e824b032680d3ca74/embed",
-    latitude: 34.5500,
-    longitude: 40.6800,
-    altitude_m: 350,
-    heading_deg: 60.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 0,
-    status: "ACTIVE",
-    sensor_type: "AESA Jammer Array",
-    mgrs: "38SLH 42800 61400",
-  },
+  { asset_id: "a39", callsign: "JAMMER-01", asset_type: "EW Radar Vehicle", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/f954fdaf89054d2e824b032680d3ca74/embed", latitude: 34.5500, longitude: 40.6800, altitude_m: 350, heading_deg: 60.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 0, status: "ACTIVE", sensor_type: "AESA Jammer Array", mgrs: "38SLH 42800 61400" },
   // ── OPFOR / Enemy Assets (Sketchfab embeds) ──
-  {
-    asset_id: "a40",
-    callsign: "HOSTILE-T72-01",
-    asset_type: "T-72A MBT",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/f55f5b31539f4586b6b75e162af65b77/embed",
-    latitude: 35.3200,
-    longitude: 40.3500,
-    altitude_m: 380,
-    heading_deg: 210.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 40,
-    status: "ACTIVE",
-    sensor_type: "1A40 Fire Control",
-    mgrs: "37SFV 90100 25800",
-  },
-  {
-    asset_id: "a41",
-    callsign: "HOSTILE-BMP-01",
-    asset_type: "BMP-2 IFV",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/2ad92d48e2054b179bd2a5474efc86ac/embed",
-    latitude: 35.3500,
-    longitude: 40.3800,
-    altitude_m: 375,
-    heading_deg: 215.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 35,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "37SFV 90400 26100",
-  },
-  {
-    asset_id: "a42",
-    callsign: "HOSTILE-TECH-01",
-    asset_type: "Technical (Armed Pickup)",
-    asset_class: "Military",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/bc5604e0a7b341909de1077d0b3bc176/embed",
-    latitude: 34.9800,
-    longitude: 40.2100,
-    altitude_m: 420,
-    heading_deg: 160.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 65,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "37SFV 86400 22100",
-  },
+  { asset_id: "a40", callsign: "HOSTILE-T72-01", asset_type: "T-72A MBT", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/f55f5b31539f4586b6b75e162af65b77/embed", latitude: 35.3200, longitude: 40.3500, altitude_m: 380, heading_deg: 210.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 40, status: "ACTIVE", sensor_type: "1A40 Fire Control", mgrs: "37SFV 90100 25800" },
+  { asset_id: "a41", callsign: "HOSTILE-BMP-01", asset_type: "BMP-2 IFV", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/2ad92d48e2054b179bd2a5474efc86ac/embed", latitude: 35.3500, longitude: 40.3800, altitude_m: 375, heading_deg: 215.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 35, status: "ACTIVE", sensor_type: null, mgrs: "37SFV 90400 26100" },
+  { asset_id: "a42", callsign: "HOSTILE-TECH-01", asset_type: "Technical (Armed Pickup)", asset_class: "Military", model_path: null, embed_url: "https://sketchfab.com/models/bc5604e0a7b341909de1077d0b3bc176/embed", latitude: 34.9800, longitude: 40.2100, altitude_m: 420, heading_deg: 160.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 65, status: "ACTIVE", sensor_type: null, mgrs: "37SFV 86400 22100" },
   // ── Civilian / Protected (Sketchfab embeds) ──
-  {
-    asset_id: "a43",
-    callsign: "CIV-BUS-01",
-    asset_type: "Civilian Bus",
-    asset_class: "Infrastructure",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/02c9f34db5714ac09a20445656f13d6a/embed",
-    latitude: 34.6000,
-    longitude: 40.7500,
-    altitude_m: 260,
-    heading_deg: 90.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 40,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "38SLH 42500 60800",
-  },
-  {
-    asset_id: "a44",
-    callsign: "CIV-SEDAN-01",
-    asset_type: "Civilian Sedan",
-    asset_class: "Infrastructure",
-    model_path: null,
-    embed_url: "https://sketchfab.com/models/bab77902c638427bb85e68b6762a481f/embed",
-    latitude: 34.5800,
-    longitude: 40.7800,
-    altitude_m: 255,
-    heading_deg: 270.0,
-    pitch_deg: 0,
-    roll_deg: 0,
-    speed_kmh: 50,
-    status: "ACTIVE",
-    sensor_type: null,
-    mgrs: "38SLH 42900 60500",
-  },
+  { asset_id: "a43", callsign: "CIV-BUS-01", asset_type: "Civilian Bus", asset_class: "Infrastructure", model_path: null, embed_url: "https://sketchfab.com/models/02c9f34db5714ac09a20445656f13d6a/embed", latitude: 34.6000, longitude: 40.7500, altitude_m: 260, heading_deg: 90.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 40, status: "ACTIVE", sensor_type: null, mgrs: "38SLH 42500 60800" },
+  { asset_id: "a44", callsign: "CIV-SEDAN-01", asset_type: "Civilian Sedan", asset_class: "Infrastructure", model_path: null, embed_url: "https://sketchfab.com/models/bab77902c638427bb85e68b6762a481f/embed", latitude: 34.5800, longitude: 40.7800, altitude_m: 255, heading_deg: 270.0, pitch_deg: 0, roll_deg: 0, speed_kmh: 50, status: "ACTIVE", sensor_type: null, mgrs: "38SLH 42900 60500" },
 ];
 
 const CLASS_COLORS: Record<string, string> = {
-  Military: "#00d4ff",
-  Infrastructure: "#f59e0b",
-  Logistics: "#94a3b8",
+  Military: "#00A8DC",
+  Infrastructure: "#C87619",
+  Logistics: "#94A3B8",
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  ACTIVE: "#22c55e",
-  LOITER: "#f59e0b",
-  RTB: "#ef4444",
-  HOLDING: "#a78bfa",
-  OPERATIONAL: "#22c55e",
-  STORED: "#64748b",
+  ACTIVE: "#32A467",
+  LOITER: "#EC9A3C",
+  RTB: "#E76A6E",
+  HOLDING: "#4C90F0",
+  OPERATIONAL: "#32A467",
+  STORED: "#64748B",
 };
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -819,29 +462,28 @@ export default function AssetsPage() {
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* Asset list */}
-      <div className="w-[260px] border-r border-[#27272a] flex flex-col overflow-y-auto bg-[#0e0e11]">
-        <div className="px-3 py-2.5 border-b border-[#27272a]">
-          <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
+      <div className="w-[260px] border-r border-[var(--om-border)] flex flex-col overflow-y-auto bg-[var(--om-bg-deep)]">
+        <div className="px-3 py-2.5 border-b border-[var(--om-border)]">
+          <span className="text-[10px] font-semibold text-[var(--om-text-secondary)] uppercase tracking-[0.12em]">
             Fleet Assets
           </span>
         </div>
 
         {MOCK_ASSETS.map((a) => {
           const active = a.asset_id === selectedId;
-          const color = CLASS_COLORS[a.asset_class];
           const statusColor = STATUS_COLORS[a.status] ?? "#71717a";
 
           return (
             <button
               key={a.asset_id}
               onClick={() => setSelectedId(a.asset_id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer border-b border-[#1a1a1f] ${
-                active ? "bg-[#141417]" : "hover:bg-[#111114]"
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer border-b border-[var(--om-border)] ${
+                active ? "bg-[var(--om-bg-primary)]" : "hover:bg-[var(--om-bg-elevated)]"
               }`}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-zinc-200 truncate">
+                  <span className="text-[11px] font-semibold text-[var(--om-text-primary)] truncate">
                     {a.callsign}
                   </span>
                   <span
@@ -851,9 +493,9 @@ export default function AssetsPage() {
                     {a.status}
                   </span>
                 </div>
-                <span className="text-[9px] text-zinc-600">{a.asset_type}</span>
+                <span className="text-[9px] text-[var(--om-text-muted)]">{a.asset_type}</span>
               </div>
-              {active && <ChevronRight size={12} className="text-zinc-600 shrink-0" />}
+              {active && <ChevronRight size={12} className="text-[var(--om-text-muted)] shrink-0" />}
             </button>
           );
         })}
@@ -872,10 +514,10 @@ export default function AssetsPage() {
           >
             {asset.asset_class.toUpperCase()}
           </span>
-          <h1 className="text-[14px] font-semibold text-zinc-100">
+          <h1 className="text-[14px] font-semibold text-[var(--om-text-primary)]">
             {asset.callsign}
           </h1>
-          <span className="text-[11px] text-zinc-500">{asset.asset_type}</span>
+          <span className="text-[11px] text-[var(--om-text-muted)]">{asset.asset_type}</span>
           <span
             className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-none"
             style={{
@@ -900,14 +542,14 @@ export default function AssetsPage() {
                 embedUrl={asset.embed_url}
               />
             ) : (
-              <div className="w-full h-full bg-[#0a0a0f] rounded-none border border-[#27272a] flex items-center justify-center">
-                <span className="text-[11px] text-zinc-600">No 3D model available</span>
+              <div className="w-full h-full bg-[var(--om-bg-deep)] rounded-none border border-[var(--om-border)] flex items-center justify-center">
+                <span className="text-[11px] text-[var(--om-text-muted)]">No 3D model available</span>
               </div>
             )}
           </div>
 
           {/* Telemetry panel */}
-          <div className="w-[220px] shrink-0 bg-[#0e0e11] rounded-none border border-[#27272a] p-4 flex flex-col gap-4 overflow-y-auto">
+          <div className="w-[220px] shrink-0 bg-[var(--om-bg-deep)] rounded-none border border-[var(--om-border)] p-4 flex flex-col gap-4 overflow-y-auto">
             <TelemetrySection title="Platform">
               <TelemetryRow label="Altitude (MSL)" value={`${asset.altitude_m.toLocaleString()}m`} />
               <TelemetryRow label="Heading" value={`${asset.heading_deg.toFixed(2)}°`} />
@@ -945,7 +587,7 @@ export default function AssetsPage() {
 function TelemetrySection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[9px] font-semibold text-zinc-400 uppercase tracking-[0.12em] mb-2">
+      <div className="text-[9px] font-semibold text-[var(--om-text-secondary)] uppercase tracking-[0.12em] mb-2">
         {title}
       </div>
       <div className="space-y-1.5">{children}</div>
@@ -956,8 +598,8 @@ function TelemetrySection({ title, children }: { title: string; children: React.
 function TelemetryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <span className="text-[10px] text-zinc-500">{label}</span>
-      <span className="text-[10px] text-zinc-300 font-[family-name:var(--font-mono)] text-right">
+      <span className="text-[10px] text-[var(--om-text-muted)]">{label}</span>
+      <span className="text-[10px] text-[var(--om-text-secondary)] font-[family-name:var(--font-mono)] text-right">
         {value}
       </span>
     </div>

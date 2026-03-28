@@ -75,15 +75,15 @@ export function TableView({ objects, onRowClick, selectedId }: TableViewProps) {
   const totalWidth = TYPE_COL_WIDTH + columns.length * COL_WIDTH;
 
   return (
-    <div className="h-full flex flex-col bg-[#09090b] min-w-0 overflow-hidden">
+    <div className="h-full flex flex-col bg-[var(--om-bg-deep)] min-w-0 overflow-hidden">
       {/* Type filter bar */}
-      <div className="flex items-center gap-1.5 px-4 py-2 border-b border-zinc-800/60 bg-[#111114] overflow-x-auto shrink-0">
+      <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--om-border)] bg-[var(--om-bg-elevated)] overflow-x-auto shrink-0">
         <button
           onClick={() => setTypeFilter(null)}
-          className={`shrink-0 px-2.5 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+          className={`shrink-0 px-2.5 py-1 rounded-sm text-[10px] font-medium transition-colors cursor-pointer ${
             typeFilter === null
-              ? "bg-white/10 text-zinc-100"
-              : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+              ? "bg-white/10 text-[var(--om-text-primary)]"
+              : "text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] hover:bg-[var(--om-bg-hover)]"
           }`}
         >
           All ({objects.length})
@@ -92,10 +92,10 @@ export function TableView({ objects, onRowClick, selectedId }: TableViewProps) {
           <button
             key={type}
             onClick={() => setTypeFilter(typeFilter === type ? null : type)}
-            className={`shrink-0 px-2.5 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+            className={`shrink-0 px-2.5 py-1 rounded-sm text-[10px] font-medium transition-colors cursor-pointer ${
               typeFilter === type
-                ? "bg-white/10 text-zinc-100"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                ? "bg-white/10 text-[var(--om-text-primary)]"
+                : "text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] hover:bg-[var(--om-bg-hover)]"
             }`}
           >
             {type} ({count})
@@ -104,8 +104,8 @@ export function TableView({ objects, onRowClick, selectedId }: TableViewProps) {
       </div>
 
       {/* Stats strip */}
-      <div className="flex items-center gap-4 px-4 py-1.5 border-b border-zinc-800/40 bg-[#0d0d0f] shrink-0">
-        <span className="text-[10px] text-zinc-500 font-[family-name:var(--font-mono)]">
+      <div className="flex items-center gap-4 px-4 py-1.5 border-b border-[var(--om-border)] bg-[var(--om-bg-primary)] shrink-0">
+        <span className="text-[10px] text-[var(--om-text-muted)] font-[family-name:var(--font-mono)]">
           {filtered.length} of {objects.length} objects
         </span>
       </div>
@@ -113,14 +113,14 @@ export function TableView({ objects, onRowClick, selectedId }: TableViewProps) {
       {/* Virtualized scrollable area — both axes */}
       <div ref={scrollRef} className="flex-1 overflow-auto min-h-0">
         {sorted.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-[11px] text-zinc-500">
+          <div className="flex items-center justify-center h-full text-[11px] text-[var(--om-text-muted)]">
             No objects to display
           </div>
         ) : (
           <div style={{ minWidth: totalWidth }}>
             {/* Sticky header */}
             <div
-              className="sticky top-0 z-10 flex bg-[#141417] border-b border-zinc-800/80"
+              className="sticky top-0 z-10 flex bg-[var(--om-bg-primary)] border-b border-[var(--om-border)]"
               style={{ minWidth: totalWidth }}
             >
               <HeaderCell
@@ -158,10 +158,10 @@ export function TableView({ objects, onRowClick, selectedId }: TableViewProps) {
                   <div
                     key={obj.rid}
                     onClick={() => onRowClick?.(obj.rid)}
-                    className={`absolute left-0 right-0 flex items-center border-b border-zinc-800/40 cursor-pointer ${
+                    className={`absolute left-0 right-0 flex items-center border-b border-[var(--om-border)] cursor-pointer ${
                       isSelected
-                        ? "bg-cyan-500/10"
-                        : "hover:bg-zinc-800/20"
+                        ? "bg-[var(--om-blue)]/10"
+                        : "hover:bg-[var(--om-bg-hover)]"
                     }`}
                     style={{
                       height: ROW_HEIGHT,
@@ -174,7 +174,7 @@ export function TableView({ objects, onRowClick, selectedId }: TableViewProps) {
                       className="shrink-0 px-3 flex items-center"
                       style={{ width: TYPE_COL_WIDTH }}
                     >
-                      <span className="inline-block px-1.5 py-0.5 rounded bg-zinc-800/60 text-[10px] text-zinc-300 font-medium truncate">
+                      <span className="inline-block px-1.5 py-0.5 rounded-sm bg-[var(--om-bg-elevated)] text-[10px] text-[var(--om-text-secondary)] font-medium truncate">
                         {obj.type}
                       </span>
                     </div>
@@ -220,7 +220,7 @@ function HeaderCell({
   return (
     <div
       onClick={() => onClick(colKey)}
-      className="shrink-0 flex items-center gap-1 px-3 py-2 text-[10px] text-zinc-500 font-semibold uppercase tracking-[0.08em] cursor-pointer hover:text-zinc-300 select-none"
+      className="shrink-0 flex items-center gap-1 px-3 py-2 text-[10px] text-[var(--om-text-muted)] font-semibold uppercase tracking-[0.08em] cursor-pointer hover:text-[var(--om-text-secondary)] select-none"
       style={{ width }}
     >
       <span className="truncate">{label}</span>
@@ -231,12 +231,12 @@ function HeaderCell({
 
 function CellValue({ value }: { value: unknown }) {
   if (value == null) {
-    return <span className="text-zinc-600 text-[11px]">-</span>;
+    return <span className="text-[var(--om-text-muted)] text-[11px]">-</span>;
   }
   if (typeof value === "boolean") {
     return (
-      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
-        value ? "bg-emerald-500/10 text-emerald-400" : "bg-zinc-800/60 text-zinc-400"
+      <span className={`inline-block px-1.5 py-0.5 rounded-sm text-[10px] font-medium ${
+        value ? "bg-emerald-500/10 text-emerald-400" : "bg-[var(--om-bg-elevated)] text-[var(--om-text-secondary)]"
       }`}>
         {value ? "true" : "false"}
       </span>
@@ -244,14 +244,14 @@ function CellValue({ value }: { value: unknown }) {
   }
   if (typeof value === "number") {
     return (
-      <span className="font-[family-name:var(--font-mono)] text-zinc-300 text-[11px] truncate">
+      <span className="font-[family-name:var(--font-mono)] text-[var(--om-text-secondary)] text-[11px] truncate">
         {value.toLocaleString()}
       </span>
     );
   }
   const str = String(value);
   return (
-    <span className="text-zinc-300 text-[11px] truncate" title={str.length > 20 ? str : undefined}>
+    <span className="text-[var(--om-text-secondary)] text-[11px] truncate" title={str.length > 20 ? str : undefined}>
       {str}
     </span>
   );
