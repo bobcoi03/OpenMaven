@@ -13,6 +13,14 @@ export interface SimPosition {
   roll_deg: number;
 }
 
+export interface SimMovementOrder {
+  destination: SimPosition;
+  start_tick: number;
+  arrive_tick: number;
+  origin_lat: number;
+  origin_lon: number;
+}
+
 export interface SimAsset {
   asset_id: string;
   callsign: string;
@@ -26,6 +34,7 @@ export interface SimAsset {
   sensor_type: string | null;
   sensor_range_km: number;
   weapons: string[];
+  movement_order: SimMovementOrder | null;
 }
 
 export interface SimFaction {

@@ -78,6 +78,7 @@ export function simAssetToTactical(sim: SimAsset): TacticalAsset {
     timestamp: new Date().toISOString(),
     speed_kmh: sim.speed_kmh,
     heading_deg: sim.position.heading_deg,
+    weapons: sim.weapons,
   };
 }
 

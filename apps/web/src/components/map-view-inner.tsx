@@ -65,6 +65,21 @@ interface TacticalMapProps {
   selectedId?: string | null;
   mapStyle?: MapStyleId;
   className?: string;
+  onContextMenu?: (event: {
+    type: "asset" | "map";
+    asset?: { asset_id: string; callsign: string; weapons: string[] };
+    lngLat?: { lng: number; lat: number };
+    x: number;
+    y: number;
+  }) => void;
+  onMapClick?: (lngLat: { lng: number; lat: number }) => void;
+  /** Dashed path line from asset to destination. */
+  movePath?: {
+    from: [number, number]; // [lng, lat]
+    to: [number, number];   // [lng, lat]
+  } | null;
+  /** Called when the destination endpoint is dragged to a new position. */
+  onMovePathDrag?: (lngLat: { lng: number; lat: number }) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -76,12 +91,23 @@ export function MapViewInner({
   selectedId,
   mapStyle = "dark",
   className = "",
+  onContextMenu,
+  onMapClick,
+  movePath,
+  onMovePathDrag,
 }: TacticalMapProps) {
-  const containerRef      = useRef<HTMLDivElement>(null);
-  const mapRef            = useRef<maplibregl.Map | null>(null);
-  const markersRef        = useRef<Map<string, { marker: maplibregl.Marker; asset: TacticalAsset }>>(new Map());
-  const onAssetClickRef   = useRef(onAssetClick);
-  onAssetClickRef.current = onAssetClick;
+  const containerRef        = useRef<HTMLDivElement>(null);
+  const mapRef              = useRef<maplibregl.Map | null>(null);
+  const markersRef          = useRef<Map<string, { marker: maplibregl.Marker; asset: TacticalAsset }>>(new Map());
+  const onAssetClickRef     = useRef(onAssetClick);
+  onAssetClickRef.current   = onAssetClick;
+  const onContextMenuRef    = useRef(onContextMenu);
+  onContextMenuRef.current  = onContextMenu;
+  const onMapClickRef         = useRef(onMapClick);
+  onMapClickRef.current       = onMapClick;
+  const onMovePathDragRef     = useRef(onMovePathDrag);
+  onMovePathDragRef.current   = onMovePathDrag;
+  const destMarkerRef         = useRef<maplibregl.Marker | null>(null);
 
   const resolvedStyle = MAP_STYLES.find((s) => s.id === mapStyle)?.style ?? DARK_STYLE;
 
@@ -99,6 +125,22 @@ export function MapViewInner({
     });
 
     mapRef.current = map;
+
+    // Map-level right-click (on empty space)
+    map.on("contextmenu", (e) => {
+      e.preventDefault();
+      onContextMenuRef.current?.({
+        type: "map",
+        lngLat: { lng: e.lngLat.lng, lat: e.lngLat.lat },
+        x: e.point.x,
+        y: e.point.y,
+      });
+    });
+
+    // Map-level click (for move-mode)
+    map.on("click", (e) => {
+      onMapClickRef.current?.({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+    });
 
     return () => {
       map.remove();
@@ -184,6 +226,27 @@ export function MapViewInner({
           if (entry) onAssetClickRef.current?.(entry.asset);
         });
 
+        el.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const entry = markersRef.current.get(assetId);
+          if (entry) {
+            const rect = containerRef.current?.getBoundingClientRect();
+            const x = e.clientX - (rect?.left ?? 0);
+            const y = e.clientY - (rect?.top ?? 0);
+            onContextMenuRef.current?.({
+              type: "asset",
+              asset: {
+                asset_id: entry.asset.asset_id,
+                callsign: entry.asset.callsign,
+                weapons: entry.asset.weapons ?? [],
+              },
+              x,
+              y,
+            });
+          }
+        });
+
         markersRef.current.set(asset.asset_id, { marker, asset });
       }
     }
@@ -214,5 +277,105 @@ export function MapViewInner({
     });
   }, [selectedId]);
 
-  return <div ref={containerRef} className={`w-full h-full ${className}`} />;
+  // ── Draw move path (dashed line + draggable endpoint) ─────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const SOURCE_ID = "move-path-source";
+    const LAYER_ID = "move-path-layer";
+
+    function addPathLayer() {
+      // Guard: map may have been removed between scheduling and execution
+      if (!map || !mapRef.current) return;
+
+      if (!movePath) {
+        // Remove line and marker if no path
+        try {
+          if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
+          if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+        } catch { /* map removed */ }
+        if (destMarkerRef.current) {
+          destMarkerRef.current.remove();
+          destMarkerRef.current = null;
+        }
+        return;
+      }
+
+      const geojson: GeoJSON.FeatureCollection = {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: [movePath.from, movePath.to],
+            },
+            properties: {},
+          },
+        ],
+      };
+
+      // Update or create source/layer
+      const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+      if (source) {
+        source.setData(geojson);
+      } else {
+        map.addSource(SOURCE_ID, { type: "geojson", data: geojson });
+        map.addLayer({
+          id: LAYER_ID,
+          type: "line",
+          source: SOURCE_ID,
+          paint: {
+            "line-color": "#22d3ee",
+            "line-width": 2,
+            "line-dasharray": [4, 3],
+            "line-opacity": 0.7,
+          },
+        });
+      }
+
+      // Destination marker (draggable crosshair)
+      if (!destMarkerRef.current) {
+        const el = document.createElement("div");
+        el.style.cssText =
+          "width:14px;height:14px;border:2px solid #22d3ee;border-radius:50%;" +
+          "background:rgba(6,182,212,0.2);cursor:grab;box-shadow:0 0 6px rgba(6,182,212,0.5);";
+        const marker = new maplibregl.Marker({ element: el, draggable: true })
+          .setLngLat(movePath.to)
+          .addTo(map);
+
+        marker.on("dragend", () => {
+          const lngLat = marker.getLngLat();
+          onMovePathDragRef.current?.({ lng: lngLat.lng, lat: lngLat.lat });
+        });
+        destMarkerRef.current = marker;
+      } else {
+        destMarkerRef.current.setLngLat(movePath.to);
+      }
+    }
+
+    if (map.loaded() && map.isStyleLoaded()) {
+      addPathLayer();
+    } else {
+      map.once("styledata", addPathLayer);
+    }
+
+    return () => {
+      // Guard: map may already be destroyed by the init effect's cleanup
+      if (destMarkerRef.current) {
+        destMarkerRef.current.remove();
+        destMarkerRef.current = null;
+      }
+      try {
+        if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
+        if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+      } catch {
+        // Map already removed — safe to ignore
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [movePath?.from[0], movePath?.from[1], movePath?.to[0], movePath?.to[1]]);
+
+  return <div ref={containerRef} className={`w-full h-full ${className}`} onContextMenu={(e) => e.preventDefault()} />;
 }

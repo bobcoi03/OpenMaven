@@ -37,6 +37,8 @@ export interface TacticalAsset {
   // Mobile assets (Military / Logistics)
   speed_kmh?: number;
   heading_deg?: number;
+  // Weapons (from simulation)
+  weapons?: string[];
   // Infrastructure assets
   status?: InfraStatus;
   efficiency_pct?: number;

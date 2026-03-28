@@ -7,9 +7,9 @@ import { useMapLayers } from "@/lib/map-layer-context";
 import { AssetDetailPanel } from "@/components/asset-detail-panel";
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import { searchObjects, queryKnowledgeGraphStream, type QueryChatMessage, type QueryStreamEvent } from "@/lib/api-client";
+import { searchObjects, queryKnowledgeGraphStream, querySimulationStream, type QueryChatMessage, type QueryStreamEvent } from "@/lib/api-client";
 import type { ObjectInstance } from "@/lib/api-types";
-import { MOCK_TACTICAL_ASSETS, MOCK_TARGETING_ALERTS, type AssetClass } from "@/lib/tactical-mock";
+import { MOCK_TACTICAL_ASSETS, type AssetClass } from "@/lib/tactical-mock";
 import {
   Search,
   Filter,
@@ -26,18 +26,27 @@ import {
   User,
   Bot,
   Layers,
-  ChevronRight,
   Crosshair,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  Radar,
+  Swords,
+  Route,
+  Shield,
+  Database,
+  GitBranch,
 } from "lucide-react";
 
 const TABS = [
-  { name: "Graph", href: "/graph", icon: Network },
-  { name: "Table", href: "/table", icon: Table },
+  // { name: "Graph", href: "/graph", icon: Network },
+  // { name: "Table", href: "/table", icon: Table },
   { name: "Map", href: "/map", icon: MapIcon },
-  { name: "Query", href: "/query", icon: MessageSquare },
-  { name: "Sources", href: "/sources", icon: FileText },
+  // { name: "Query", href: "/query", icon: MessageSquare },
+  // { name: "Sources", href: "/sources", icon: FileText },
   { name: "Assets", href: "/assets", icon: Crosshair },
   { name: "Decisions", href: "/decisions", icon: SlidersHorizontal },
+  { name: "Design", href: "/design", icon: Layers },
 ] as const;
 
 const TYPE_COLORS: Record<string, string> = {
@@ -52,11 +61,15 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   sources?: Array<{ rid: string; name: string; type: string }>;
+  toolSteps?: ToolStep[];
 }
 
-interface QueryProgressItem {
+interface ToolStep {
   id: string;
-  label: string;
+  name: string;
+  args?: Record<string, unknown>;
+  status: "running" | "complete" | "error";
+  preview?: string;
 }
 
 // ── Layer config for the tactical sidebar ─────────────────────────────────────
@@ -71,6 +84,124 @@ const LAYER_CFG: {
   { id: "Infrastructure", color: "#f59e0b", bg: "rgba(245,158,11,0.08)", description: "Oil · Power · Bridges"  },
   { id: "Logistics",      color: "#94a3b8", bg: "rgba(148,163,184,0.08)",description: "Supply · Air Transport"  },
 ];
+
+// ── Tool labels ──────────────────────────────────────────────────────────────
+
+const TOOL_LABELS: Record<string, { running: string; done: string }> = {
+  get_battlefield_summary: { running: "Scanning battlefield...", done: "Scanned battlefield" },
+  list_factions: { running: "Listing factions...", done: "Listed factions" },
+  get_faction_state: { running: "Querying faction...", done: "Queried faction" },
+  get_force_disposition: { running: "Loading ORBAT...", done: "Loaded ORBAT" },
+  find_assets: { running: "Searching assets...", done: "Found assets" },
+  get_assets_near: { running: "Scanning area...", done: "Scanned area" },
+  get_asset_details: { running: "Fetching asset details...", done: "Fetched asset details" },
+  get_recent_events: { running: "Loading events...", done: "Loaded events" },
+  plan_strike: { running: "Planning strike...", done: "Strike planned" },
+  execute_strike: { running: "Executing strike...", done: "Strike executed" },
+  order_move: { running: "Ordering movement...", done: "Movement ordered" },
+  get_schema: { running: "Fetching schema...", done: "Fetched schema" },
+  run_cypher: { running: "Running query...", done: "Query complete" },
+  search_entities: { running: "Searching entities...", done: "Found entities" },
+};
+
+function getToolLabel(name: string, status: string): string {
+  const entry = TOOL_LABELS[name];
+  if (entry) return status === "running" ? entry.running : entry.done;
+  return status === "running" ? `Running ${name}...` : `Ran ${name}`;
+}
+
+// ── Tool step components ─────────────────────────────────────────────────────
+
+function ToolStepRow({ step }: { step: ToolStep }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded border border-zinc-800/60 bg-zinc-900/30 overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-1.5 px-2 py-1 text-left cursor-pointer hover:bg-zinc-800/30 transition-colors"
+      >
+        {step.status === "running" && (
+          <Loader2 size={10} className="animate-spin text-cyan-500 shrink-0" />
+        )}
+        {step.status === "complete" && (
+          <CheckCircle2 size={10} className="text-emerald-500 shrink-0" />
+        )}
+        {step.status === "error" && (
+          <XCircle size={10} className="text-red-500 shrink-0" />
+        )}
+        <span className="text-[10px] text-zinc-400 flex-1 truncate">
+          {getToolLabel(step.name, step.status)}
+        </span>
+        {(step.args || step.preview) && (
+          <ChevronDown
+            size={10}
+            className={`text-zinc-600 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        )}
+      </button>
+      {open && (
+        <div className="px-2 py-1.5 border-t border-zinc-800/40 text-[9px] font-mono text-zinc-500 max-h-24 overflow-y-auto">
+          {step.args && Object.keys(step.args).length > 0 && (
+            <div className="mb-1">
+              <span className="text-zinc-600">args: </span>
+              {Object.entries(step.args).map(([k, v]) => (
+                <span key={k} className="mr-2">
+                  <span className="text-zinc-500">{k}=</span>
+                  <span className="text-cyan-600">{JSON.stringify(v)}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          {step.preview && (
+            <div className="text-zinc-500 break-words">{step.preview}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolStepGroup({ steps, live = false }: { steps: ToolStep[]; live?: boolean }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const allDone = steps.every((s) => s.status !== "running");
+
+  // Auto-collapse completed groups on historical messages
+  if (!live && allDone && collapsed === false && steps.length > 0) {
+    // rendered collapsed by default for historical messages
+  }
+
+  return (
+    <div className="mb-2">
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="flex items-center gap-1.5 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer mb-1"
+      >
+        {live && !allDone ? (
+          <Loader2 size={10} className="animate-spin text-cyan-500" />
+        ) : (
+          <CheckCircle2 size={10} className="text-emerald-600" />
+        )}
+        <span>
+          {live && !allDone
+            ? `Using tools (${steps.filter((s) => s.status === "complete").length}/${steps.length})...`
+            : `Used ${steps.length} tool${steps.length !== 1 ? "s" : ""}`}
+        </span>
+        <ChevronDown
+          size={10}
+          className={`transition-transform ${collapsed ? "" : "rotate-180"}`}
+        />
+      </button>
+      {!collapsed && (
+        <div className="ml-1 border-l-2 border-zinc-800/60 pl-2 space-y-1">
+          {steps.map((step) => (
+            <ToolStepRow key={step.id} step={step} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── AppShell ──────────────────────────────────────────────────────────────────
 
@@ -93,13 +224,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [queryText, setQueryText] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isQuerying, setIsQuerying] = useState(false);
-  const [queryProgress, setQueryProgress] = useState<QueryProgressItem[]>([]);
+  const [toolSteps, setToolSteps] = useState<ToolStep[]>([]);
+  const toolStepsRef = useRef<ToolStep[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Keep tool steps ref in sync for closure access
+  useEffect(() => {
+    toolStepsRef.current = toolSteps;
+  }, [toolSteps]);
 
   // Auto-scroll messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, toolSteps]);
 
   // Debounced search
   const doSearch = useCallback(async (query: string) => {
@@ -165,6 +302,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── AI query handler ──────────────────────────────────────────────
+  const isMapRoute = pathname === "/map";
+
   async function handleQuerySubmit() {
     const question = queryText.trim();
     if (!question || isQuerying) return;
@@ -174,31 +313,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const nextChatForApi: QueryChatMessage[] = nextMessages.map((m) => ({ role: m.role, content: m.content }));
     setMessages(nextMessages);
     setIsQuerying(true);
-    setQueryProgress([{ id: "start", label: "Analyzing your question..." }]);
+    setToolSteps([]);
+
+    const streamFn = isMapRoute ? querySimulationStream : queryKnowledgeGraphStream;
 
     try {
-      await queryKnowledgeGraphStream(question, nextChatForApi, (event: QueryStreamEvent) => {
-        if (event.type === "status") {
-          setQueryProgress((prev) => [...prev, { id: crypto.randomUUID(), label: event.message }]);
-          return;
-        }
+      await streamFn(question, nextChatForApi, (event: QueryStreamEvent) => {
         if (event.type === "tool_call") {
-          setQueryProgress((prev) => [
+          setToolSteps((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), label: `Calling ${event.name}...` },
+            {
+              id: crypto.randomUUID(),
+              name: event.name,
+              args: event.args,
+              status: "running",
+            },
           ]);
           return;
         }
         if (event.type === "tool_result") {
-          setQueryProgress((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
-              label: event.ok
-                ? `${event.name} returned data`
-                : `${event.name} returned an error`,
-            },
-          ]);
+          setToolSteps((prev) =>
+            prev.map((step) =>
+              step.name === event.name && step.status === "running"
+                ? {
+                    ...step,
+                    status: event.ok ? "complete" : "error",
+                    preview: event.preview,
+                  }
+                : step,
+            ),
+          );
           return;
         }
         if (event.type === "final") {
@@ -208,18 +352,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               role: "assistant",
               content: event.answer,
               sources: event.sources,
+              toolSteps: [...toolStepsRef.current],
             },
           ]);
-          setQueryProgress((prev) => [
-            ...prev,
-            { id: crypto.randomUUID(), label: "Answer ready." },
-          ]);
+          setToolSteps([]);
           return;
         }
         if (event.type === "error") {
-          setQueryProgress((prev) => [
+          setToolSteps((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), label: `Error: ${event.message}` },
+            {
+              id: crypto.randomUUID(),
+              name: "error",
+              status: "error",
+              preview: event.message,
+            },
           ]);
         }
       });
@@ -233,6 +380,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ]);
     } finally {
       setIsQuerying(false);
+      setToolSteps([]);
     }
   }
 
@@ -241,18 +389,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* ── Top Bar ─────────────────────────────────────────────────── */}
       <header className="h-10 flex items-center justify-between px-3 bg-[#141417] border-b border-[#27272a] shrink-0 z-20">
         <div className="flex items-center gap-3">
-          {/* Tactical classification badge */}
-          <div className="flex items-center gap-1.5">
-            <span
-              className="text-[9px] font-bold px-1.5 py-px rounded"
-              style={{ background: "#ef4444", color: "#fff", letterSpacing: "0.05em" }}
-            >
-              TS
-            </span>
-            <span className="text-[11px] font-semibold text-zinc-100 tracking-[0.18em] uppercase">
-              OpenMaven
-            </span>
-          </div>
+          <span className="text-[11px] font-semibold text-zinc-100 tracking-[0.18em] uppercase">
+            OpenMaven
+          </span>
           <div className="w-px h-4 bg-[#27272a]" />
           <nav className="flex gap-0.5">
             {TABS.map(({ name, href, icon: Icon }) => {
@@ -485,9 +624,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {/* Messages area */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {messages.length === 0 ? (
-              <p className="text-[11px] text-zinc-500 leading-[1.6]">
-                Ask questions about your knowledge graph. Upload data via the Sources tab to get started.
-              </p>
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <Bot size={14} className="text-cyan-500" />
+                  <span className="text-[11px] font-semibold text-zinc-300">
+                    {isMapRoute ? "C2 Operator" : "Knowledge Graph Agent"}
+                  </span>
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-[1.6]">
+                  {isMapRoute
+                    ? "Tactical AI assistant with live access to the simulation."
+                    : "AI assistant with access to your knowledge graph."}
+                </p>
+                <div className="space-y-1.5">
+                  {(isMapRoute
+                    ? [
+                        { icon: Radar, label: "Battlefield overview", desc: "Force disposition, faction status" },
+                        { icon: Search, label: "Find & track assets", desc: "Locate units by name, type, or area" },
+                        { icon: Swords, label: "Plan & execute strikes", desc: "Weapon selection, target assessment" },
+                        { icon: Route, label: "Order movements", desc: "Reposition assets to coordinates" },
+                        { icon: Shield, label: "Faction intelligence", desc: "Doctrine, morale, capabilities" },
+                      ]
+                    : [
+                        { icon: Database, label: "Query entities", desc: "Search across all object types" },
+                        { icon: GitBranch, label: "Explore relationships", desc: "Traverse links between entities" },
+                        { icon: Search, label: "Natural language search", desc: "Ask questions in plain English" },
+                      ]
+                  ).map(({ icon: Icon, label, desc }) => (
+                    <div
+                      key={label}
+                      className="flex items-start gap-2.5 px-2.5 py-2 border border-zinc-800/60 bg-zinc-900/40"
+                    >
+                      <Icon size={13} className="text-zinc-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-medium text-zinc-300">{label}</div>
+                        <div className="text-[9px] text-zinc-600">{desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               messages.map((msg, i) => (
                 <div key={i} className="flex gap-2">
@@ -499,6 +675,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
+                    {/* Tool steps (for assistant messages) */}
+                    {msg.role === "assistant" && msg.toolSteps && msg.toolSteps.length > 0 && (
+                      <ToolStepGroup steps={msg.toolSteps} />
+                    )}
                     <div className="text-[11px] text-zinc-300 leading-[1.6] break-words">
                       <ReactMarkdown
                         components={{
@@ -550,21 +730,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               ))
             )}
+            {/* In-progress tool steps */}
             {isQuerying && (
               <div className="flex gap-2">
                 <Bot size={12} className="text-cyan-500 shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Loader2 size={12} className="animate-spin text-zinc-500" />
-                    <span className="text-[10px] text-zinc-500">Working...</span>
-                  </div>
-                  {queryProgress.length > 0 && (
-                    <div className="space-y-1">
-                      {queryProgress.slice(-4).map((item) => (
-                        <p key={item.id} className="text-[10px] text-zinc-500 leading-[1.4]">
-                          {item.label}
-                        </p>
-                      ))}
+                  {toolSteps.length > 0 ? (
+                    <ToolStepGroup steps={toolSteps} live />
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Loader2 size={12} className="animate-spin text-zinc-500" />
+                      <span className="text-[10px] text-zinc-500">Thinking...</span>
                     </div>
                   )}
                 </div>
@@ -575,24 +751,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Input */}
           <div className="px-3 py-2.5 border-t border-zinc-800/60">
-            <div className="flex gap-2">
-              <input
-                type="text"
+            <div className="bg-zinc-900/80 border border-zinc-800/80 focus-within:border-zinc-600 transition-colors">
+              <textarea
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleQuerySubmit();
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleQuerySubmit();
+                  }
                 }}
-                placeholder="Ask about the knowledge graph..."
-                className="flex-1 px-3 py-1.5 text-[11px] rounded bg-zinc-900/80 border border-zinc-800/80 text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+                placeholder={isMapRoute ? "Ask about the battlefield..." : "Ask about the knowledge graph..."}
+                rows={1}
+                className="w-full px-3 pt-2 pb-1 text-[11px] text-zinc-300 placeholder:text-zinc-600 bg-transparent border-none outline-none resize-none leading-[1.6]"
+                style={{ minHeight: "28px", maxHeight: "120px", fieldSizing: "content" } as React.CSSProperties}
               />
-              <button
-                onClick={handleQuerySubmit}
-                disabled={isQuerying}
-                className="px-2.5 py-1.5 bg-zinc-700 text-zinc-200 rounded hover:bg-zinc-600 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <Send size={11} />
-              </button>
+              <div className="flex justify-end px-2 pb-1.5">
+                <button
+                  onClick={handleQuerySubmit}
+                  disabled={isQuerying || !queryText.trim()}
+                  className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                >
+                  <Send size={12} />
+                </button>
+              </div>
             </div>
           </div>
         </aside>
@@ -616,12 +798,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               );
             })}
-            <div className="flex items-center gap-1 text-[10px] shrink-0">
-              <ChevronRight size={10} className="text-red-500" />
-              <span className="text-red-400 font-mono">
-                {MOCK_TARGETING_ALERTS.filter((a) => a.stage === "DYNAMIC").length} DYNAMIC
-              </span>
-            </div>
           </>
         ) : (
           entityCounts.map(({ type, count, color }) => (

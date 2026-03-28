@@ -18,6 +18,19 @@ export interface MapViewProps {
   selectedId?: string | null;
   mapStyle?: MapStyleId;
   className?: string;
+  onContextMenu?: (event: {
+    type: "asset" | "map";
+    asset?: { asset_id: string; callsign: string; weapons: string[] };
+    lngLat?: { lng: number; lat: number };
+    x: number;
+    y: number;
+  }) => void;
+  onMapClick?: (lngLat: { lng: number; lat: number }) => void;
+  movePath?: {
+    from: [number, number];
+    to: [number, number];
+  } | null;
+  onMovePathDrag?: (lngLat: { lng: number; lat: number }) => void;
 }
 
 const MapViewInner = dynamic(

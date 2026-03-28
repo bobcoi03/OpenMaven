@@ -13,262 +13,28 @@
  *   │  │                                         ││
  *   │  │  [asset markers per class]              ││
  *   │  └─────────────────────────────────────────┘│
- *   │  ┌─────────────────────────────────────────┐│
- *   │  │  TARGETING BOARD (collapsible kanban)   ││
- *   │  └─────────────────────────────────────────┘│
  *   └─────────────────────────────────────────────┘
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { MapView } from "@/components/map-view";
 import { MAP_STYLES, type MapStyleId } from "@/components/map-view-inner";
 import { SimulationControls } from "@/components/simulation-controls";
+import { ContextMenu, type ContextMenuState } from "@/components/context-menu";
 import { useMapLayers } from "@/lib/map-layer-context";
 import { useSimulation } from "@/lib/use-simulation";
 import { simAssetsToTactical } from "@/lib/sim-to-tactical";
-import {
-  MOCK_TARGETING_ALERTS,
-  type TacticalAsset,
-  type TargetingAlert,
-  type AlertStage,
-} from "@/lib/tactical-mock";
-import {
-  ChevronDown,
-  ChevronUp,
-  Target,
-  Zap,
-  CheckCircle2,
-  Timer,
-  CircleDot,
-  X,
-  Crosshair,
-  Activity,
-} from "lucide-react";
-
-// ── Targeting board ───────────────────────────────────────────────────────────
-
-const STAGE_ORDER: AlertStage[] = [
-  "DYNAMIC",
-  "PENDING PAIRING",
-  "PAIRED",
-  "IN EXECUTION",
-  "COMPLETE",
-];
-
-const STAGE_CFG: Record<
-  AlertStage,
-  { color: string; border: string; icon: React.ElementType }
-> = {
-  "DYNAMIC":         { color: "text-red-400",    border: "border-l-red-500",    icon: Activity     },
-  "PENDING PAIRING": { color: "text-amber-400",  border: "border-l-amber-500",  icon: Timer        },
-  "PAIRED":          { color: "text-blue-400",   border: "border-l-blue-500",   icon: CircleDot    },
-  "IN EXECUTION":    { color: "text-cyan-400",   border: "border-l-cyan-500",   icon: Zap          },
-  "COMPLETE":        { color: "text-emerald-400",border: "border-l-emerald-500",icon: CheckCircle2 },
-};
-
-const CLASSIFICATION_CFG: Record<string, string> = {
-  MS:  "text-red-400 border-red-800/60 bg-red-950/40",
-  CC:  "text-amber-400 border-amber-800/60 bg-amber-950/40",
-  ECD: "text-cyan-400 border-cyan-800/60 bg-cyan-950/40",
-};
-
-function AlertCard({
-  alert,
-  isSelected,
-  onSelect,
-}: {
-  alert: TargetingAlert;
-  isSelected: boolean;
-  onSelect: () => void;
-}) {
-  const cfg = STAGE_CFG[alert.stage];
-  const cls = CLASSIFICATION_CFG[alert.classification] ?? "text-zinc-400 border-zinc-700 bg-zinc-900/40";
-  const confColor =
-    alert.confidence >= 90 ? "#22c55e" : alert.confidence >= 75 ? "#f59e0b" : "#94a3b8";
-
-  return (
-    <div
-      onClick={onSelect}
-      className={`border-l-2 ${cfg.border} bg-[#141417] border border-zinc-800/80 rounded-r px-2.5 py-2 cursor-pointer transition-all hover:border-zinc-600/60 ${
-        isSelected ? "ring-1 ring-cyan-500/40 bg-cyan-950/10" : ""
-      }`}
-    >
-      <div className="flex items-center gap-1.5 mb-1">
-        <Crosshair size={9} className="text-zinc-500" />
-        <span className="text-[9px] text-zinc-400 truncate flex-1">{alert.label}</span>
-        <span
-          className={`text-[8px] px-1 py-px rounded border font-semibold shrink-0 ${cls}`}
-        >
-          {alert.classification}
-        </span>
-      </div>
-      <div className="text-[10px] text-zinc-200 font-medium mb-1">{alert.asset_type}</div>
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] font-mono text-zinc-600">{alert.grid_ref.slice(-10)}</span>
-        <span className="text-[9px] font-mono" style={{ color: confColor }}>
-          {alert.confidence}%
-        </span>
-      </div>
-      <div className="text-[8px] text-zinc-700 mt-0.5 text-right">{alert.created_ago}</div>
-    </div>
-  );
-}
-
-function TargetingBoard({
-  alerts,
-}: {
-  alerts: TargetingAlert[];
-}) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const byStage = useMemo(() => {
-    const map: Record<AlertStage, TargetingAlert[]> = {
-      "DYNAMIC": [], "PENDING PAIRING": [], "PAIRED": [], "IN EXECUTION": [], "COMPLETE": [],
-    };
-    for (const a of alerts) map[a.stage].push(a);
-    return map;
-  }, [alerts]);
-
-  const selected = alerts.find((a) => a.id === selectedId);
-
-  return (
-    <div className="h-full flex overflow-hidden bg-[#09090b]">
-      {/* Kanban columns */}
-      <div className="flex-1 overflow-x-auto">
-        <div className="flex h-full min-w-max">
-          {STAGE_ORDER.map((stage) => {
-            const stageCfg = STAGE_CFG[stage];
-            const StageIcon = stageCfg.icon;
-            const cards = byStage[stage];
-
-            return (
-              <div
-                key={stage}
-                className="flex flex-col w-[175px] border-r border-[#27272a] last:border-r-0"
-              >
-                {/* Column header */}
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#141417] border-b border-[#27272a] shrink-0">
-                  <StageIcon size={10} className={stageCfg.color} />
-                  <span className={`text-[9px] font-semibold tracking-[0.12em] ${stageCfg.color}`}>
-                    {stage}
-                  </span>
-                  <span className="ml-auto text-[9px] text-zinc-700 font-mono">
-                    {cards.length}
-                  </span>
-                </div>
-
-                {/* Cards */}
-                <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
-                  {cards.map((alert) => (
-                    <AlertCard
-                      key={alert.id}
-                      alert={alert}
-                      isSelected={selectedId === alert.id}
-                      onSelect={() =>
-                        setSelectedId(alert.id === selectedId ? null : alert.id)
-                      }
-                    />
-                  ))}
-                  {cards.length === 0 && (
-                    <div className="flex items-center justify-center h-12 text-[9px] text-zinc-800">
-                      No targets
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Selected alert detail */}
-      {selected && (
-        <div className="w-[220px] bg-[#141417] border-l border-[#27272a] flex flex-col shrink-0">
-          <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#27272a]">
-            <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-[0.1em]">
-              Target Detail
-            </span>
-            <button
-              onClick={() => setSelectedId(null)}
-              className="text-zinc-700 hover:text-zinc-400 transition-colors"
-            >
-              <X size={11} />
-            </button>
-          </div>
-          <div className="px-2.5 py-2 space-y-2 overflow-y-auto">
-            <div>
-              <div className="text-[9px] text-zinc-600 uppercase tracking-[0.1em]">Label</div>
-              <div className="text-[10px] text-zinc-300 mt-0.5">{selected.label}</div>
-            </div>
-            <div>
-              <div className="text-[9px] text-zinc-600 uppercase tracking-[0.1em]">Asset Type</div>
-              <div className="text-[11px] text-zinc-100 font-semibold mt-0.5">{selected.asset_type}</div>
-            </div>
-            <div>
-              <div className="text-[9px] text-zinc-600 uppercase tracking-[0.1em]">Grid Ref</div>
-              <div className="text-[10px] text-cyan-400 font-mono mt-0.5">{selected.grid_ref}</div>
-            </div>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <div className="text-[9px] text-zinc-600 uppercase tracking-[0.1em]">Confidence</div>
-                <div
-                  className="text-[11px] font-semibold font-mono mt-0.5"
-                  style={{
-                    color:
-                      selected.confidence >= 90 ? "#22c55e" :
-                      selected.confidence >= 75 ? "#f59e0b" : "#94a3b8",
-                  }}
-                >
-                  {selected.confidence}%
-                </div>
-              </div>
-              <div className="flex-1">
-                <div className="text-[9px] text-zinc-600 uppercase tracking-[0.1em]">Class</div>
-                <div
-                  className={`text-[10px] font-semibold mt-0.5 ${CLASSIFICATION_CFG[selected.classification]?.split(" ")[0] ?? "text-zinc-400"}`}
-                >
-                  {selected.classification}
-                </div>
-              </div>
-            </div>
-            <div>
-              <div className="text-[9px] text-zinc-600 uppercase tracking-[0.1em]">Stage</div>
-              <div className={`text-[10px] font-semibold mt-0.5 ${STAGE_CFG[selected.stage].color}`}>
-                {selected.stage}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-1 space-y-1">
-              {selected.stage === "DYNAMIC" && (
-                <button className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded hover:bg-amber-500/20 transition-colors cursor-pointer">
-                  <Timer size={10} /> Pair Asset
-                </button>
-              )}
-              {selected.stage === "PAIRED" && (
-                <button className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-medium text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 rounded hover:bg-cyan-500/20 transition-colors cursor-pointer">
-                  <Zap size={10} /> Execute
-                </button>
-              )}
-              {selected.stage === "IN EXECUTION" && (
-                <button className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-[10px] font-medium text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer">
-                  <CheckCircle2 size={10} /> Mark Complete
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function MapPage() {
   const { visibleLayers, selectedAsset, setSelectedAsset } = useMapLayers();
-  const [boardOpen, setBoardOpen] = useState(true);
   const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [moveMode, setMoveMode] = useState<string | null>(null); // asset_id being moved
+  const [moveDest, setMoveDest] = useState<{ lng: number; lat: number } | null>(null);
+  // Track assets we've explicitly ordered to move (not auto-patrol)
+  const [commandedMoves, setCommandedMoves] = useState<Map<string, { lng: number; lat: number }>>(new Map());
 
   const sim = useSimulation();
 
@@ -286,9 +52,133 @@ export default function MapPage() {
     [tacticalAssets, visibleLayers],
   );
 
-  const alertCount = MOCK_TARGETING_ALERTS.filter(
-    (a) => a.stage === "DYNAMIC" || a.stage === "PENDING PAIRING",
-  ).length;
+  // Remove commanded move tracking when asset arrives at destination
+  useEffect(() => {
+    let changed = false;
+    const next = new Map(commandedMoves);
+    next.forEach((_, assetId) => {
+      const asset = sim.assets[assetId];
+      if (!asset || asset.status !== "moving") {
+        next.delete(assetId);
+        changed = true;
+      }
+    });
+    if (changed) setCommandedMoves(next);
+  }, [sim.assets, commandedMoves]);
+
+  // Compute move path line for the map:
+  // 1. Preview mode: moveMode + moveDest (before confirm)
+  // 2. Commanded move: asset we explicitly ordered (after confirm, while still moving)
+  const movePath = useMemo(() => {
+    // Preview path (move mode with a chosen destination)
+    if (moveMode && moveDest) {
+      const asset = sim.assets[moveMode];
+      if (!asset) return null;
+      return {
+        from: [asset.position.longitude, asset.position.latitude] as [number, number],
+        to: [moveDest.lng, moveDest.lat] as [number, number],
+      };
+    }
+
+    // Commanded move on selected asset (only moves we explicitly issued)
+    if (selectedId && commandedMoves.has(selectedId)) {
+      const asset = sim.assets[selectedId];
+      const dest = commandedMoves.get(selectedId)!;
+      if (asset) {
+        return {
+          from: [asset.position.longitude, asset.position.latitude] as [number, number],
+          to: [dest.lng, dest.lat] as [number, number],
+        };
+      }
+    }
+
+    return null;
+  }, [moveMode, moveDest, selectedId, commandedMoves, sim.assets]);
+
+  // ── Context menu handlers ────────────────────────────────────────────────
+
+  const handleContextMenu = useCallback(
+    (event: {
+      type: "asset" | "map";
+      asset?: { asset_id: string; callsign: string; weapons: string[] };
+      lngLat?: { lng: number; lat: number };
+      x: number;
+      y: number;
+    }) => {
+      setContextMenu({
+        type: event.type,
+        asset: event.asset,
+        lngLat: event.lngLat,
+        x: event.x,
+        y: event.y,
+      });
+    },
+    [],
+  );
+
+  const handleContextMenuAction = useCallback(
+    (action: string, payload?: Record<string, unknown>) => {
+      setContextMenu(null);
+
+      if (action === "details" && payload?.assetId) {
+        const simAsset = sim.assets[payload.assetId as string];
+        if (simAsset) setSelectedAsset(simAsset);
+      }
+
+      if (action === "move" && payload?.assetId) {
+        setMoveMode(payload.assetId as string);
+      }
+
+      if (action === "strike" && payload?.weaponId && payload?.targetId) {
+        sim.strike(payload.weaponId as string, payload.targetId as string);
+      }
+
+      if (action === "move_here" && payload?.assetId && payload?.lat != null && payload?.lon != null) {
+        setMoveMode(payload.assetId as string);
+        setMoveDest({ lng: payload.lon as number, lat: payload.lat as number });
+      }
+    },
+    [sim, setSelectedAsset],
+  );
+
+  const handleMapClick = useCallback(
+    (lngLat: { lng: number; lat: number }) => {
+      if (moveMode) {
+        if (!moveDest) {
+          // First click: preview path
+          setMoveDest(lngLat);
+        } else {
+          // Second click or confirm: execute move
+          sim.moveAsset(moveMode, moveDest.lat, moveDest.lng);
+          setMoveMode(null);
+          setMoveDest(null);
+        }
+      }
+    },
+    [moveMode, moveDest, sim],
+  );
+
+  const handleMovePathDrag = useCallback(
+    (lngLat: { lng: number; lat: number }) => {
+      setMoveDest(lngLat);
+    },
+    [],
+  );
+
+  const handleConfirmMove = useCallback(() => {
+    if (moveMode && moveDest) {
+      sim.moveAsset(moveMode, moveDest.lat, moveDest.lng);
+      setCommandedMoves((prev) => new Map(prev).set(moveMode, moveDest));
+      setSelectedAsset(sim.assets[moveMode] ?? null);
+      setMoveMode(null);
+      setMoveDest(null);
+    }
+  }, [moveMode, moveDest, sim, setSelectedAsset]);
+
+  const handleCancelMove = useCallback(() => {
+    setMoveMode(null);
+    setMoveDest(null);
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col bg-[#09090b] overflow-hidden">
@@ -308,6 +198,7 @@ export default function MapPage() {
           assets={visibleAssets}
           visibleLayers={visibleLayers}
           onAssetClick={(tacticalAsset) => {
+            if (moveMode) return; // ignore clicks during move mode
             const simAsset = sim.assets[tacticalAsset.asset_id];
             if (selectedId === tacticalAsset.asset_id) {
               setSelectedAsset(null);
@@ -317,7 +208,54 @@ export default function MapPage() {
           }}
           selectedId={selectedId}
           mapStyle={mapStyle}
+          onContextMenu={handleContextMenu}
+          onMapClick={moveMode ? handleMapClick : undefined}
+          movePath={movePath}
+          onMovePathDrag={handleMovePathDrag}
         />
+
+        {/* Move-mode indicator */}
+        {moveMode && (
+          <div
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded text-[10px] font-semibold"
+            style={{
+              background: "rgba(6,182,212,0.15)",
+              border: "1px solid rgba(6,182,212,0.4)",
+              color: "#22d3ee",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            {moveDest ? (
+              <>
+                <span>
+                  {moveDest.lat.toFixed(2)}, {moveDest.lng.toFixed(2)}
+                </span>
+                <button
+                  onClick={handleConfirmMove}
+                  className="px-2 py-0.5 bg-cyan-500/20 border border-cyan-500/40 rounded hover:bg-cyan-500/30 cursor-pointer transition-colors"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={handleCancelMove}
+                  className="text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                Click map to set destination
+                <button
+                  onClick={handleCancelMove}
+                  className="text-zinc-400 hover:text-zinc-200 cursor-pointer ml-1"
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Asset count HUD */}
         <div className="absolute top-2 left-2 z-20 flex gap-1.5">
@@ -348,9 +286,8 @@ export default function MapPage() {
           })}
         </div>
 
-        {/* Top-right HUD: map style toggle + alert badge */}
+        {/* Top-right HUD: map style toggle */}
         <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
-          {/* Map style toggle */}
           <div
             className="flex rounded overflow-hidden text-[9px] font-semibold"
             style={{ background: "rgba(8,13,24,0.85)", border: "1px solid #27272a", backdropFilter: "blur(4px)" }}
@@ -369,48 +306,16 @@ export default function MapPage() {
               </button>
             ))}
           </div>
-
-          {alertCount > 0 && (
-            <div
-              className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-semibold"
-              style={{
-                background: "rgba(239,68,68,0.15)",
-                border: "1px solid rgba(239,68,68,0.4)",
-                color: "#f87171",
-                backdropFilter: "blur(4px)",
-              }}
-            >
-              <Activity size={10} />
-              {alertCount} ACTIVE ALERTS
-            </div>
-          )}
         </div>
 
-      </div>
-
-      {/* ── Targeting Board ───────────────────────────────────────────── */}
-      <div
-        className="shrink-0 border-t border-[#27272a] flex flex-col"
-        style={{ height: boardOpen ? "200px" : "30px" }}
-      >
-        {/* Board toolbar */}
-        <div className="flex items-center gap-2 px-3 h-[30px] shrink-0 bg-[#141417] border-b border-[#27272a] cursor-pointer" onClick={() => setBoardOpen((o) => !o)}>
-          <Target size={10} className="text-red-400" />
-          <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-[0.12em]">
-            Targeting Board
-          </span>
-          <span className="text-[9px] text-red-400 font-mono bg-red-950/40 border border-red-900/40 px-1.5 py-px rounded">
-            {MOCK_TARGETING_ALERTS.filter((a) => a.stage !== "COMPLETE").length} ACTIVE
-          </span>
-          <div className="ml-auto text-zinc-600">
-            {boardOpen ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
-          </div>
-        </div>
-
-        {boardOpen && (
-          <div className="flex-1 min-h-0">
-            <TargetingBoard alerts={MOCK_TARGETING_ALERTS} />
-          </div>
+        {/* Context Menu */}
+        {contextMenu && (
+          <ContextMenu
+            state={contextMenu}
+            selectedAssetId={selectedId}
+            onAction={handleContextMenuAction}
+            onClose={() => setContextMenu(null)}
+          />
         )}
       </div>
     </div>
