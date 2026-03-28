@@ -23,16 +23,16 @@ export interface ApiData {
 }
 
 const NODE_COLORS: Record<string, string> = {
-  company: "#a1a1aa",
-  founder: "#71717a",
-  industry: "#d4d4d8",
-  batch: "#52525b",
-  location: "#e4e4e7",
+  company: "#147EB3",
+  founder: "#9D3F9D",
+  industry: "#D1980B",
+  batch: "#00A396",
+  location: "#D33D17",
 };
 
 const FALLBACK_COLORS = [
-  "#06b6d4", "#a78bfa", "#f59e0b", "#f87171", "#10b981",
-  "#38bdf8", "#94a3b8", "#e879f9", "#fb923c", "#34d399",
+  "#147EB3", "#9D3F9D", "#D1980B", "#00A396", "#D33D17",
+  "#2D72D2", "#94A3B8", "#DB2C6F", "#C87619", "#238551",
 ];
 
 export function useApiData(): ApiData {

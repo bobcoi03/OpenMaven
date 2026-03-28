@@ -9,25 +9,31 @@
  * which asset classes are rendered as map markers).
  */
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useCallback } from "react";
 import type { AssetClass } from "@/lib/tactical-mock";
+import type { SimAsset } from "@/lib/use-simulation";
 
 interface MapLayerContextValue {
   visibleLayers: Set<AssetClass>;
   toggleLayer: (layer: AssetClass) => void;
   isVisible: (layer: AssetClass) => boolean;
+  selectedAsset: SimAsset | null;
+  setSelectedAsset: (asset: SimAsset | null) => void;
 }
 
 const MapLayerContext = createContext<MapLayerContextValue>({
   visibleLayers: new Set(["Military", "Infrastructure", "Logistics"]),
   toggleLayer: () => {},
   isVisible: () => true,
+  selectedAsset: null,
+  setSelectedAsset: () => {},
 });
 
 export function MapLayerProvider({ children }: { children: React.ReactNode }) {
   const [visibleLayers, setVisibleLayers] = useState<Set<AssetClass>>(
     new Set(["Military", "Infrastructure", "Logistics"] as AssetClass[]),
   );
+  const [selectedAsset, setSelectedAssetRaw] = useState<SimAsset | null>(null);
 
   function toggleLayer(layer: AssetClass) {
     setVisibleLayers((prev) => {
@@ -38,12 +44,18 @@ export function MapLayerProvider({ children }: { children: React.ReactNode }) {
     });
   }
 
+  const setSelectedAsset = useCallback((asset: SimAsset | null) => {
+    setSelectedAssetRaw(asset);
+  }, []);
+
   return (
     <MapLayerContext.Provider
       value={{
         visibleLayers,
         toggleLayer,
         isVisible: (layer) => visibleLayers.has(layer),
+        selectedAsset,
+        setSelectedAsset,
       }}
     >
       {children}

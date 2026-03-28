@@ -20,16 +20,25 @@ export type AssetType = MilitaryType | InfraType | LogisticsType;
 
 export type InfraStatus = "OPERATIONAL" | "DEGRADED" | "CRITICAL";
 
+export type Affiliation = "friendly" | "hostile" | "neutral" | "unknown";
+
 export interface TacticalAsset {
   asset_id: string;
   asset_type: AssetType;
   asset_class: AssetClass;
+  faction_id: string;
+  affiliation: Affiliation;
+  callsign: string;
+  /** Original asset type name from the simulation (e.g. "M1 Abrams") */
+  sim_asset_type: string;
   latitude: number;
   longitude: number;
   timestamp: string;
   // Mobile assets (Military / Logistics)
   speed_kmh?: number;
   heading_deg?: number;
+  // Weapons (from simulation)
+  weapons?: string[];
   // Infrastructure assets
   status?: InfraStatus;
   efficiency_pct?: number;
@@ -105,10 +114,15 @@ function buildAsset(
 ): TacticalAsset {
   const lat = LAT_MIN + rng() * (LAT_MAX - LAT_MIN);
   const lon = LON_MIN + rng() * (LON_MAX - LON_MIN);
+  const id = uuid(rng);
   const base: TacticalAsset = {
-    asset_id: uuid(rng),
+    asset_id: id,
     asset_type: type,
     asset_class: assetClass,
+    faction_id: "blue",
+    affiliation: "friendly",
+    callsign: id.slice(0, 8).toUpperCase(),
+    sim_asset_type: type,
     latitude: Math.round(lat * 1e6) / 1e6,
     longitude: Math.round(lon * 1e6) / 1e6,
     timestamp: new Date().toISOString(),

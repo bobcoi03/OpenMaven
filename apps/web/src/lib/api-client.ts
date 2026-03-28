@@ -181,12 +181,29 @@ export type QueryStreamEvent =
 
 export type QueryChatMessage = { role: "user" | "assistant"; content: string };
 
+export async function querySimulationStream(
+  question: string,
+  messages: QueryChatMessage[],
+  onEvent: (event: QueryStreamEvent) => void,
+): Promise<void> {
+  return _streamQuery("/api/sim-query/stream", question, messages, onEvent);
+}
+
 export async function queryKnowledgeGraphStream(
   question: string,
   messages: QueryChatMessage[],
   onEvent: (event: QueryStreamEvent) => void,
 ): Promise<void> {
-  const response = await fetch("/api/query/stream", {
+  return _streamQuery("/api/query/stream", question, messages, onEvent);
+}
+
+async function _streamQuery(
+  url: string,
+  question: string,
+  messages: QueryChatMessage[],
+  onEvent: (event: QueryStreamEvent) => void,
+): Promise<void> {
+  const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, messages }),
