@@ -256,93 +256,299 @@ Each event has a `tick_delay` (when it fires) and `mutations` (structured ontolo
 ## What the Friend is Building (Separate Branch)
 
 **Branch:** `feature/detection-engine` off `main`
-**Directory:** `detection/` (repo root)
+**Directory:** `apps/api/detection/`
 
-- `detection_engine.py` — Kafka consumer that reads simulation telemetry, generates simulated CV detections with confidence scores
+**Task 1: Detection & Targeting Engine**
+- `detection_engine.py` — pure function module, takes asset state dict → returns simulated CV detections
 - `targeting_board.py` — state machine: DYNAMIC → PENDING_PAIRING → PAIRED → IN_EXECUTION → COMPLETE
 - `alert_rules.py` — geofence/proximity math (haversine, point-in-box)
-- `models.py` — dataclasses for Detection, Target, Alert
-- Tests for everything
+- `models.py` — dataclasses for Detection, Target, Alert, Zone
+- No Kafka, no I/O — pure functions. Integration wired in later.
 
-This feeds into the targeting board UI and the detection overlay on the map.
+**Task 2: Expanded Asset Library**
+- Add adversary equipment for: Russia, China, Iran, North Korea, Syria, ISIS, Hezbollah, Houthis
+- For each asset type: find Sketchfab 3D model embed URL, add to `ASSET_EMBED_MAP`
+- Workflow: web search asset types → search Sketchfab → grab embed URL → add to code → manual QA pass for bad picks (~20% need fixing)
+- See `docs/adversary-assets.md` for the full reference catalog
+- When no Sketchfab model exists, fall back to NATO symbology (already in codebase)
 
 ---
 
 ## Technical Execution Plan
 
-### Phase 1: Simulation Core (You)
+### Phase 1: Simulation Core ✅ DONE
 
-**Branch:** `feature/realtime-ui` off `main`
+**1.1 — SimulationManager** `apps/api/simulation/`
+- `manager.py` — world state, tick loop as asyncio task
+- `rules.py` — strike/weapon profiles, resolve_strike(), infrastructure cascading
+- `faction.py` — Faction dataclass, capability/morale
+- `events.py` — EventQueue with scheduled events
+- `profiles.py` — category tables
 
-**1.1 — SimulationManager**
-`apps/api/simulation/`
-- `manager.py` — holds world state (factions, assets, event queue), runs tick loop as asyncio task
-- `rules.py` — strike profiles, weapon profiles, resolve_strike(), infrastructure cascading
-- `faction.py` — Faction dataclass, capability recalculation, morale updates
-- `events.py` — EventQueue with scheduled events, tick-based firing
-- `profiles.py` — category tables (STRIKE_PROFILES, WEAPON_PROFILES, CATEGORY_MAP)
+**1.2 — WebSocket Pipeline** `apps/api/ws/`
+- Connection manager, broadcast diffs, frontend `useSimulation` hook
 
-**1.2 — WebSocket Pipeline**
-`apps/api/ws/`
-- `connection_manager.py` — track connected clients, broadcast diffs
-- WebSocket endpoint on FastAPI — clients subscribe, receive state diffs each tick
-- Frontend hook (`useSimulation`) — connects, receives updates, patches local state
+**1.3 — Live Map** `apps/web/`
+- NATO symbology markers, speed controls, tick counter, 3D model embeds
 
-**1.3 — Live Map**
-`apps/web/`
-- Replace `tactical-mock.ts` with live WebSocket data
-- Asset markers update positions each tick
-- Speed controls: play / pause / 1x / 2x / 5x / 10x
-- Tick counter display
+### Phase 2: Actions, Commands & Design System ✅ DONE
 
-### Phase 2: Actions & Commands (You)
+**2.1 — Action Endpoints** — strike, move, set_speed via WebSocket
+**2.2 — Action UI** — right-click context menu, move-to mode, strike confirmation
+**2.3 — LLM Command Panel** — sim query agent with tool-calling
+**2.4 — Design System** — `--om-*` CSS tokens, system font, Blueprint blue accent, design showcase page
 
-**2.1 — Action Endpoints**
-`apps/api/routes/actions.py`
-- POST endpoints for each action type (strike, move, task_isr, set_roe, etc.)
-- Each validates input, calls SimulationManager methods, returns result
-- WebSocket broadcasts the mutation to all clients
+### Phase 3: Fog of War & Sensors
 
-**2.2 — Action UI**
-- Right-click asset → context menu (Move, Strike, Details)
-- Right-click map → context menu (Set alert zone, Task ISR here)
-- Action confirmation dialogs with expected outcomes
+The single biggest upgrade. Without it, the player is omniscient and there's no tension.
 
-**2.3 — LLM Command Panel**
-- Chat panel on the right side
-- Tool-calling agent with simulation-aware tools (get_faction_state, get_assets_near, etc.)
-- Natural language commands translated to structured actions
-- Briefing-style responses after significant events
+**3.1 — Detection Model** `apps/api/simulation/detection.py`
+- Each tick: for each enemy asset, check if any friendly sensor can detect it
+- Detection probability: `1.0 - (distance / sensor_range)^2` × asset signature value
+- Signature values by type: MBT=0.9, Technical=0.6, Infantry=0.2, F-35=0.1, DDG=1.0
+- Returns `{enemy_asset_id: Detection}` dict with position, confidence, detecting sensor
 
-### Phase 3: Consequence Engine (You)
+**3.2 — Fog of War Frontend**
+- `simAssetsToTactical()` filters: always show own faction, only show enemies if detected
+- "Ghost" markers: previously detected but now out-of-range enemies show faded at last-known position with age timestamp
+- Sensor coverage overlay: semi-transparent circles for each friendly sensor range on map
 
-**3.1 — LLM Integration**
-`apps/api/simulation/consequence_engine.py`
-- Triggered by significant events (not every tick)
-- Tool-calling loop: pulls relevant state, generates structured events
-- Returns events with probabilities, tick delays, and mutations
-- Events injected into the EventQueue
+**3.3 — Strike Targeting Fix**
+- Right-clicking enemy shows "Strike" option → finds closest friendly asset with appropriate weapon → confirms the strike pairing
+- Make it explicit in the UI: "REAPER-01 → GBU-38 → TARGET" so it's clear who is striking
 
-**3.2 — Faction AI**
-- Each hostile faction has autonomous behavior between LLM calls
-- Simple rules: patrol routes, defend zones, respond to proximity alerts
-- LLM handles the big strategic decisions; rules handle the routine
+### Phase 4: Fuel & Logistics
 
-### Phase 4: Integration (Both)
+Assets have finite fuel. Adds urgency and forces real logistics decisions.
 
-**4.1 — Wire detection engine output to API**
-- His detection engine writes to Kafka → your API consumes → targeting board UI populated
-- Detection overlay on map (bounding boxes, confidence labels)
+**4.1 — Fuel System** `apps/api/simulation/profiles.py`
+- Add `FUEL_PROFILES` dict: fuel capacity (L), burn rate (L/km), terrain multiplier
+- Key data: M1 Abrams 1900L/4.7L/km=400km, HMMWV 95L/0.16L/km=600km, F-16 550km combat radius, MQ-9 1850km range
+- In `_tick_movement`: calculate distance traveled, call `consume_fuel()`, if fuel=0 → status=HOLDING (stranded), if fuel<20% → alert
+- Aircraft: burn rate per minute (not per km), combat radius = half max range
 
-**4.2 — Targeting Board UI**
-- Kanban-style board: DYNAMIC | PENDING PAIRING | PAIRED | IN EXECUTION | COMPLETE
-- Drag targets between stages (or click advance)
+**4.2 — Range Visualization (Frontend)**
+- When selecting an asset in move mode, show translucent range circle on map
+- `max_range_km = fuel_remaining / burn_rate_per_km`
+- Concentric rings at 25/50/75/100% fuel for polish
+- For aircraft: halve for combat radius (need fuel to return)
+
+**4.3 — Resupply**
+- `command_resupply(supplier_id, target_id)` — moves supplier to target, transfers fuel on arrival
+- M977 HEMTT and CH-47 Chinook serve as resupply assets with `cargo_fuel_liters` field
+- Supply depots act as infinite fuel sources within a radius
+
+### Phase 5: Faction AI & Combat Behaviors
+
+Enemy factions fight back. Three tiers of intelligence.
+
+**5.1 — Rule-Based Reactive AI** `apps/api/simulation/combat_ai.py`
+- Utility-based scoring system (not behavior trees — simpler to debug)
+- Per-asset each tick: score HOLD, ENGAGE, RETREAT, SEEK_COVER, CALL_SUPPORT, ADVANCE
+- Scoring factors: health (< 0.3 → retreat), threat proximity, numerical advantage (local allies vs threats within 10km), doctrine modifier
+- Doctrine: AGGRESSIVE ×1.3 engage/advance, DEFENSIVE ×1.3 hold/retreat, GUERRILLA hit-and-run pattern
+- Patrol zones: rectangular areas per faction, assets cycle through waypoints
+
+**5.2 — Combat Behaviors**
+- **Retreat when damaged**: health < 30% → move toward nearest FOB, status=RTB
+- **Call for reinforcements**: outnumbered → broadcast contact event → nearby friendlies converge
+- **Suppression**: under fire → reduce accuracy and speed for N ticks (`suppressed_until_tick`)
+- **Cover bonus**: assets near structures get 20-40% damage reduction
+
+**5.3 — LLM Faction Commander** `apps/api/simulation/consequence_engine.py`
+- One LLM call per significant event per faction (not every tick)
+- Triggers: strike executed, leader killed, capability < threshold, geofence breach
+- Prompt includes: faction state, nearby assets, recent events, available commands
+- Returns JSON array of commands: move, engage, retreat, hold, concentrate
+- Cost: ~$0.00024/call (gpt-4o-mini), ~$0.012/hour of gameplay
+
+### Phase 6: Road Pathfinding (OSRM)
+
+Ground vehicles follow actual road networks instead of flying in straight lines.
+
+**6.1 — Self-Hosted OSRM**
+- Docker: `osrm/osrm-backend` with Syria/Iraq OSM extract from Geofabrik (~180MB)
+- Preprocess with car.lua profile (or custom military vehicle profile)
+- API: `GET /route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=full&geometries=geojson`
+- Response: distance, duration, GeoJSON LineString geometry
+
+**6.2 — Integration with Sim**
+- In `command_move`: if asset domain is ground, call OSRM → get waypoint list
+- Store `waypoints: list[tuple[float, float]]` in MovementOrder
+- In `_tick_movement`: interpolate along polyline (not straight line)
+- Send full route to frontend → MapLibre draws as LineString layer
+- Fallback: if OSRM unavailable, straight-line (current behavior)
+
+**6.3 — Alternative: Valhalla**
+- Built-in truck costing model with height/weight/width constraints (better for military vehicles)
+- Isochrone generation: "area reachable within X hours" → irregular polygons following road density
+- Dynamic costing: avoid certain roads per request without reprocessing
+- Can replace OSRM if more realism needed
+
+### Phase 7: OSM Infrastructure Integration
+
+Real-world infrastructure as targetable objects. Power plants, bridges, oil facilities from OpenStreetMap.
+
+**7.1 — Overpass API Queries**
+- Self-hosted Overpass instance (Docker: `wiktorn/overpass-api`) with Middle East extract (~2GB)
+- Query infrastructure within scenario bounding box: `[out:json]; nwr["power"="plant"](bbox); out center;`
+- Tag mapping: `power=plant`, `aeroway=aerodrome`, `military=airfield`, `bridge=yes`, `industrial=refinery`, `man_made=petroleum_well`, `landuse=military`
+- Returns JSON with lat/lon, name, type tags
+
+**7.2 — Scenario Builder**
+- Script: query Overpass → convert to SimAsset objects → inject into scenario
+- Each infrastructure asset gets: position (lat/lon from OSM), type, hardness profile, dependency links
+- Infrastructure cascading: destroy power plant → bases within 50km lose radar capability
+
+**7.3 — Coverage Notes**
+- Iraq: good coverage (airports, oil, power, military)
+- Syria: 173k km roads mapped, major infrastructure present, some gaps in rural areas
+- Military facilities: often under-mapped (intentional), use `landuse=military` outlines
+- OSM data = baseline terrain layer; asset status (intact/destroyed) maintained separately in sim
+
+### Phase 8: LLM Asset Pilots
+
+Chat with individual friendly assets. The ultimate demo feature.
+
+**8.1 — Per-Asset Chat Endpoint**
+- `POST /api/simulation/chat/{asset_id}`
+- System prompt: pilot personality, current status (position, fuel, health, weapons, contacts, orders)
+- Military radio brevity, SALUTE reports, standard phraseology
+- Natural language orders → extracted as structured commands via tool-calling
+
+**8.2 — Chat UI**
+- Chat input in asset detail panel (when friendly asset selected)
+- Military-style terminal aesthetic
+- Example: "REAPER-01, orbit Al-Mayadin and report vehicle movement" → pilot acknowledges, adjusts orbit
+- Pilot expresses concern if ordered into danger with low fuel/health
+
+**8.3 — Cost**
+- ~500 tokens in + ~100 tokens out per message = ~$0.0001 per turn (gpt-4o-mini)
+- Negligible even with heavy use
+
+### Phase 9: Integration (Both)
+
+**9.1 — Wire Detection Engine**
+- Friend's detection module called from tick loop → detections feed into fog-of-war system
+- Detection overlay on map (confidence badges, source labels)
+
+**9.2 — Targeting Board**
+- Kanban UI already exists at `/decisions`
+- Wire to friend's targeting_board.py state machine
 - Click target → highlights on map, shows detection details
 
-**4.3 — Scenario System**
-- YAML/JSON scenario files defining: theatre bounds, factions, initial asset placement, objectives
-- Load scenario → simulation initializes → user starts playing
-- Ship 2-3 example scenarios (Syria/Iraq border, island assault, convoy defense)
+**9.3 — Scenario System**
+- YAML/JSON scenario files: theatre bounds, factions, initial asset placement, objectives, OSM infrastructure query bbox
+- Load scenario → query OSM → populate assets → simulation starts
+- Ship 2-3 scenarios: Syria/Iraq border, Strait of Hormuz, South China Sea island chain
+
+---
+
+## Phase 10+: Experimental / Future Vision
+
+Ideas that push OpenMaven from "impressive simulation" to "holy shit" territory.
+
+### 10.1 — Simulated Drone Feeds & Camera Views
+
+The Palantir demo shows live drone video feeds alongside the map. We can simulate this.
+
+**Approach A: Satellite imagery viewport (easiest)**
+- MapLibre GL supports 3D terrain via `setTerrain()` with Mapbox/MapTiler DEM tiles
+- Render a second MapLibre instance positioned at the drone's lat/lon/altitude, pitched 60-80° downward, bearing = drone heading
+- This gives a "drone camera" view showing real satellite imagery of the terrain below
+- Update position every tick as the drone moves — looks like a live feed
+- Overlay: crosshairs, lat/lon readout, altitude bar, "FLIR" color filter (grayscale + white-hot)
+
+**Approach B: Street-level imagery**
+- [Mapillary](https://www.mapillary.com/) has free crowdsourced street-level imagery with API access
+- For ground assets: show nearest street-level photo at asset's position
+- Limited coverage in conflict zones but dramatic where available
+
+**Approach C: AI-generated synthetic imagery (experimental)**
+- Given lat/lon + altitude + heading, use an image generation model to create what a camera would see
+- Train on satellite/aerial imagery for the theatre
+- Very experimental but could produce convincing "sensor feeds"
+
+### 10.2 — Real-Time Data Overlays
+
+Layer real-world live data onto the simulation map alongside simulated assets.
+
+| Data Source | What It Provides | API / Access |
+|-------------|-----------------|-------------|
+| **ADS-B Exchange / OpenSky Network** | Live aircraft positions globally (civilian + some military) | Free API, 5s updates |
+| **MarineTraffic / AIS** | Live ship positions, vessel type, heading, speed | Free tier available |
+| **GDELT Project** | Real-time news events geocoded to lat/lon, conflict/protest/disaster | Free, updated every 15 min |
+| **ACLED** | Armed conflict events with precise lat/lon, fatalities, actor names | Free for researchers |
+| **OpenWeatherMap** | Temperature, wind, cloud cover, precipitation | Free tier, affects sim ops |
+| **Sentinel-2 (ESA)** | Free satellite imagery, 10m resolution, updated every 5 days | Copernicus Open Access Hub |
+| **FIRMS (NASA)** | Active fire/thermal anomaly data globally | Free, near-real-time |
+
+**Integration concept:** Toggle layers on/off in the map sidebar. Real ADS-B aircraft appear alongside simulated assets. GDELT news events show as markers with headlines. Weather affects sensor detection range and aircraft operations. Creates a "mixed reality" where simulated operations play out against a backdrop of real-world data.
+
+### 10.3 — Replay & After-Action Review (AAR)
+
+Record every tick's state diff. Play it back like a movie.
+
+- **Event log:** Every action (user + AI) timestamped and stored
+- **Replay mode:** Slider scrubs through tick history, map animates, events replay
+- **LLM AAR:** After simulation ends, LLM generates a written after-action report: what happened, key turning points, what could have been done differently
+- **Heat maps:** Show where most combat occurred, asset movement trails, sensor coverage over time
+
+### 10.4 — Multiplayer (Adversarial)
+
+Two players, two factions, fog of war between them.
+
+- Each player only sees their own assets + detected enemies
+- WebSocket rooms: player A's commands only affect faction A
+- Could also do cooperative: two players commanding different aspects of the same faction (air commander + ground commander)
+- Spectator mode: sees everything, useful for training/review
+
+### 10.5 — Voice Commands
+
+Speech-to-text for issuing orders. Extremely authentic military feel.
+
+- Browser Web Speech API (free, built-in) or Whisper API
+- "REAPER-01, this is OVERLORD, orbit grid reference 38SLH 445 608, report all movers"
+- Parse with LLM → structured command → execute
+- Audio feedback: text-to-speech for pilot responses (ElevenLabs or browser TTS)
+
+### 10.6 — 3D Globe View (CesiumJS)
+
+Strategic zoom-out showing the full theatre on a 3D globe.
+
+- [CesiumJS](https://cesium.com/platform/cesiumjs/) — open-source 3D globe with terrain, buildings, satellite imagery
+- Seamless transition: globe view (strategic) → map view (tactical) → street level (ground truth)
+- Missile trajectories rendered as 3D arcs across the globe
+- Satellite orbits visualized for ISR coverage windows
+
+### 10.7 — Electronic Warfare & Cyber
+
+- **Jamming:** EW assets reduce enemy sensor range within a radius
+- **SIGINT:** Intercept enemy communications → reveal nearby enemy positions
+- **Spoofing:** Create false radar contacts that enemy AI reacts to
+- **Cyber attacks:** Degrade enemy C2 network → slower reaction time, reduced coordination
+- All implemented as status effects on assets/factions, not actual network attacks
+
+### 10.8 — Terrain & Weather Effects
+
+- **Elevation data:** Mapbox Terrain-DEM tiles → line-of-sight calculations (can't see behind hills)
+- **Weather zones:** Cloud cover reduces air sensor detection, rain slows ground movement by 30%, sandstorms reduce all sensor range by 50%
+- **Night/day cycle:** Thermal sensors gain advantage at night, visual sensors degraded
+- **Terrain speed modifiers:** Desert ×0.7, mountain ×0.3, urban ×0.5 for ground vehicles (already partially implemented)
+
+### 10.9 — Intelligence Reports & Briefings
+
+- LLM generates formatted intelligence products: INTSUM, SITREP, OPORD
+- Updated automatically as situation evolves
+- PDF/printable export for realism
+- "Morning briefing" generated at simulation start summarizing known enemy disposition
+
+### 10.10 — Diplomatic & Information Operations
+
+- **Negotiate:** Open a channel with enemy faction (ceasefire, prisoner exchange, withdrawal terms)
+- **Propaganda:** Information operations that affect enemy morale over time
+- **Alliance management:** Request allied faction support, coordinate joint operations
+- **Civilian impact tracking:** Collateral damage score, humanitarian corridor management
 
 ---
 
@@ -430,13 +636,28 @@ This is **Phase 5 (polish)** — do it after the core simulation loop, actions, 
 main  ←  stable, merge via PRs only
   │
   ├── feature/detection-engine   (friend)
-  │     └── detection/
+  │     └── apps/api/detection/
+  │     └── apps/web/src/components/asset-detail-panel.tsx (Sketchfab embeds)
   │
-  └── feature/realtime-ui        (you)
+  └── feature/<phase-name>       (you, one branch per phase)
         └── apps/api/simulation/
         └── apps/api/ws/
-        └── apps/api/routes/actions.py
-        └── apps/web/ (map, WebSocket, action UI, command panel)
+        └── apps/web/
 ```
 
-Directories don't overlap. Integration point is the ontology store. His work feeds data in, your work reads it out and displays it.
+Merge each phase to main via PR before starting the next. Friend's detection + asset library work is independent — no merge conflicts expected.
+
+## Priority Matrix
+
+| # | Feature | Complexity | Demo Impact | Depends On |
+|---|---------|-----------|------------|------------|
+| 3 | Fog of War & Sensors | Medium | **Very High** | — |
+| 4 | Fuel & Logistics | Medium | High | — |
+| 4.2 | Range Visualization | Low | High | Phase 4 |
+| 5.1 | Rule-Based Faction AI | Medium | High | — |
+| 5.2 | Combat Behaviors | Medium | Medium | Phase 5.1 |
+| 6 | Road Pathfinding | Medium-High | **Very High** | Docker/OSRM |
+| 5.3 | LLM Faction Commander | Medium | Very High | Phase 5.1 |
+| 7 | OSM Infrastructure | Medium | High | Overpass setup |
+| 8 | LLM Asset Pilots | Medium | **Extremely High** | — |
+| 9 | Integration | Medium | High | Friend's work |
