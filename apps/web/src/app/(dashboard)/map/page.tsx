@@ -7,23 +7,27 @@
  * Logic is delegated to hooks; this file is layout + wiring.
  */
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { MapView } from "@/components/map-view";
 import { MAP_STYLES, type MapStyleId } from "@/components/map-view-inner";
 import { SimulationControls } from "@/components/simulation-controls";
 import { ContextMenu } from "@/components/context-menu";
+import { StrikePairingPanel } from "@/components/strike-pairing-panel";
+import { StrikeLogPanel } from "@/components/strike-log-panel";
 import { useMapLayers } from "@/lib/map-layer-context";
-import { useSimulation } from "@/lib/use-simulation";
+import { useSimulation, type MissionUpdate } from "@/lib/use-simulation";
 import { useMapMove } from "@/lib/use-map-move";
 import { useMapContextMenu } from "@/lib/use-map-context-menu";
 import { useSensorRanges } from "@/lib/use-sensor-ranges";
 import { simAssetsToTactical } from "@/lib/sim-to-tactical";
+import { findBestPairing, findAllPairings, refreshPairing, type PairingSelection } from "@/lib/strike-pairing";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function MapPage() {
   const { visibleLayers, selectedAsset, setSelectedAsset } = useMapLayers();
   const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
+  const [showSensorRanges, setShowSensorRanges] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef<HTMLDivElement>(null);
 
@@ -44,6 +48,199 @@ export default function MapPage() {
 
   const sensorRanges = useSensorRanges(sim.assets);
 
+  // ── AI strike plan visualization ──────────────────────────────────────
+  const [strikePlan, setStrikePlan] = useState<
+    Array<{ shooterId: string; targetId: string }> | null
+  >(null);
+
+  useEffect(() => {
+    function onStrikePlan(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      const lines = detail.lines ?? [];
+      setStrikePlan(
+        lines.map((l: { shooter_id: string; target_id: string }) => ({
+          shooterId: l.shooter_id,
+          targetId: l.target_id,
+        })),
+      );
+    }
+    window.addEventListener("openmaven:strike_plan", onStrikePlan);
+    return () => window.removeEventListener("openmaven:strike_plan", onStrikePlan);
+  }, []);
+
+  // Clear plan when real missions launch
+  useEffect(() => {
+    if (Object.keys(sim.activeMissions).length > 0 && strikePlan) {
+      setStrikePlan(null);
+    }
+  }, [sim.activeMissions, strikePlan]);
+
+  // Compute planned line coordinates from LIVE asset positions
+  const plannedLines = useMemo(() => {
+    if (!strikePlan) return null;
+    const lines: Array<{ from: [number, number]; to: [number, number] }> = [];
+    for (const { shooterId, targetId } of strikePlan) {
+      const shooter = sim.assets[shooterId];
+      const target = sim.assets[targetId];
+      if (!shooter || !target) continue;
+      lines.push({
+        from: [shooter.position.longitude, shooter.position.latitude],
+        to: [target.position.longitude, target.position.latitude],
+      });
+    }
+    return lines.length > 0 ? lines : null;
+  }, [strikePlan, sim.assets]);
+
+  // ── Strike pairing state ──────────────────────────────────────────────
+  const [pairingSelection, setPairingSelection] = useState<PairingSelection | null>(null);
+  const [noShooterMsg, setNoShooterMsg] = useState(false);
+  const [missionInitialDistKm, setMissionInitialDistKm] = useState(0);
+
+  // Recompute live telemetry from current asset positions every tick
+  const activePairing = useMemo(() => {
+    if (!pairingSelection) return null;
+    const live = refreshPairing(pairingSelection, sim.assets);
+    if (!live) {
+      setPairingSelection(null);
+      return null;
+    }
+    return live;
+  }, [pairingSelection, sim.assets]);
+
+  // All alternative pairings for the selected target
+  const allPairings = useMemo(() => {
+    if (!pairingSelection) return [];
+    const target = sim.assets[pairingSelection.targetId];
+    if (!target || target.status === "destroyed") return [];
+    return findAllPairings(target, sim.assets);
+  }, [pairingSelection, sim.assets]);
+
+  const handleStrikeTarget = useCallback(
+    (targetId: string) => {
+      const target = sim.assets[targetId];
+      if (!target || target.status === "destroyed") return;
+
+      const pairing = findBestPairing(target, sim.assets);
+      if (pairing) {
+        setPairingSelection({
+          shooterId: pairing.shooter.asset_id,
+          weaponId: pairing.weaponId,
+          targetId: pairing.target.asset_id,
+        });
+        setNoShooterMsg(false);
+      } else {
+        setNoShooterMsg(true);
+        setTimeout(() => setNoShooterMsg(false), 2000);
+      }
+    },
+    [sim.assets],
+  );
+
+  const handleSelectPairing = useCallback(
+    (shooterId: string, weaponId: string) => {
+      if (!pairingSelection) return;
+      setPairingSelection({ shooterId, weaponId, targetId: pairingSelection.targetId });
+    },
+    [pairingSelection],
+  );
+
+  // Find active mission for the currently selected target
+  const activeMissionForTarget = useMemo((): MissionUpdate | null => {
+    if (!pairingSelection) return null;
+    for (const m of Object.values(sim.activeMissions)) {
+      if (m.target_id === pairingSelection.targetId) return m;
+    }
+    return null;
+  }, [pairingSelection, sim.activeMissions]);
+
+  // Check strike log for recently completed missions for this target
+  const completedMissionForTarget = useMemo((): MissionUpdate | null => {
+    if (!pairingSelection) return null;
+    const recent = sim.strikeLog.find(
+      (e) => e.target_id === pairingSelection.targetId && sim.tick - e.tick <= 2,
+    );
+    if (!recent) return null;
+    return {
+      mission_id: recent.mission_id,
+      shooter_id: "",
+      weapon_id: recent.weapon_id,
+      target_id: recent.target_id,
+      status: recent.status as MissionUpdate["status"],
+      result: recent.result,
+    };
+  }, [pairingSelection, sim.strikeLog, sim.tick]);
+
+  const missionForPanel = activeMissionForTarget ?? completedMissionForTarget;
+
+  // Auto-dismiss panel 2s after mission completes
+  useEffect(() => {
+    if (!completedMissionForTarget || activeMissionForTarget) return;
+    const timer = setTimeout(() => setPairingSelection(null), 2000);
+    return () => clearTimeout(timer);
+  }, [completedMissionForTarget, activeMissionForTarget]);
+
+  const handleConfirmStrike = useCallback(() => {
+    if (!pairingSelection || !activePairing) return;
+    if (sim.assets[pairingSelection.targetId]?.status === "destroyed") {
+      setPairingSelection(null);
+      return;
+    }
+    setMissionInitialDistKm(activePairing.distanceKm);
+    sim.strikeMission(pairingSelection.shooterId, pairingSelection.weaponId, pairingSelection.targetId);
+    // Keep panel open to show mission progress
+  }, [pairingSelection, activePairing, sim]);
+
+  const handleAbortMission = useCallback(() => {
+    if (!activeMissionForTarget) return;
+    sim.abortMission(activeMissionForTarget.mission_id);
+    setPairingSelection(null);
+  }, [activeMissionForTarget, sim]);
+
+  const handleCancelPairing = useCallback(() => setPairingSelection(null), []);
+
+  // Compute strike line from live pairing positions (for selected mission)
+  const strikeLine = useMemo(() => {
+    if (!activePairing) return null;
+    return {
+      from: [
+        activePairing.shooter.position.longitude,
+        activePairing.shooter.position.latitude,
+      ] as [number, number],
+      to: [
+        activePairing.target.position.longitude,
+        activePairing.target.position.latitude,
+      ] as [number, number],
+    };
+  }, [activePairing]);
+
+  // Compute strike lines for ALL active missions
+  const strikeLines = useMemo(() => {
+    const lines: Array<{ from: [number, number]; to: [number, number] }> = [];
+    for (const m of Object.values(sim.activeMissions)) {
+      const shooter = sim.assets[m.shooter_id];
+      const target = sim.assets[m.target_id];
+      if (!shooter || !target) continue;
+      lines.push({
+        from: [shooter.position.longitude, shooter.position.latitude],
+        to: [target.position.longitude, target.position.latitude],
+      });
+    }
+    return lines;
+  }, [sim.activeMissions, sim.assets]);
+
+  // ESC dismisses pairing panel (higher priority than move mode)
+  useEffect(() => {
+    if (!pairingSelection) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setPairingSelection(null);
+      }
+    };
+    document.addEventListener("keydown", handler, true);
+    return () => document.removeEventListener("keydown", handler, true);
+  }, [pairingSelection]);
+
   // ── Hooks ───────────────────────────────────────────────────────────────
 
   const move = useMapMove({
@@ -58,7 +255,7 @@ export default function MapPage() {
     onSelectAsset: setSelectedAsset,
     onStartMove: move.startMove,
     onStartMoveHere: move.startMoveHere,
-    onStrike: sim.strike,
+    onStrikeTarget: handleStrikeTarget,
   });
 
   // ── Help tooltip click-outside ──────────────────────────────────────────
@@ -107,7 +304,11 @@ export default function MapPage() {
           movePath={move.movePath}
           onMovePathDrag={move.handleDrag}
           sensorRanges={sensorRanges}
+          showSensorRanges={showSensorRanges}
           moveMode={move.moveMode}
+          strikeLine={strikeLine}
+          strikeLines={strikeLines}
+          plannedLines={plannedLines}
         />
 
         {/* Move-mode indicator */}
@@ -170,8 +371,25 @@ export default function MapPage() {
           })}
         </div>
 
-        {/* Top-right HUD: map style toggle + help */}
+        {/* Top-right HUD: map style toggle + sensor toggle + help */}
         <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+          {/* Sensor range toggle */}
+          <button
+            onClick={() => setShowSensorRanges((v) => !v)}
+            className={`px-2.5 py-1 rounded-sm text-[9px] font-semibold cursor-pointer transition-colors ${
+              showSensorRanges
+                ? "text-[var(--om-blue-light)]"
+                : "text-[var(--om-text-muted)]"
+            }`}
+            style={{
+              background: "rgba(30,34,41,0.85)",
+              border: `1px solid ${showSensorRanges ? "rgba(45,114,210,0.4)" : "var(--om-border)"}`,
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            Sensors
+          </button>
+
           <div
             className="flex rounded-sm overflow-hidden text-[9px] font-semibold"
             style={{ background: "rgba(30,34,41,0.85)", border: "1px solid var(--om-border)", backdropFilter: "blur(4px)" }}
@@ -258,6 +476,56 @@ export default function MapPage() {
         <div className="absolute bottom-1.5 left-2 z-20 text-[8px] text-[var(--om-text-muted)] tracking-wide">
           Right-click drag: tilt{" · "}Left-click drag: pan{" · "}Scroll: zoom
         </div>
+
+        {/* Strike Pairing Panel */}
+        {activePairing && (
+          <StrikePairingPanel
+            pairing={activePairing}
+            allPairings={allPairings}
+            activeMission={missionForPanel}
+            allActiveMissions={sim.activeMissions}
+            initialDistanceKm={missionInitialDistKm}
+            onConfirm={handleConfirmStrike}
+            onCancel={handleCancelPairing}
+            onAbortMission={activeMissionForTarget ? handleAbortMission : undefined}
+            onSelectPairing={handleSelectPairing}
+          />
+        )}
+
+        {/* Active missions indicator */}
+        {Object.keys(sim.activeMissions).length > 0 && !activePairing && (
+          <div
+            className="absolute bottom-4 right-4 z-40 px-3 py-1.5 rounded-sm text-[9px] font-semibold"
+            style={{
+              background: "rgba(30,34,41,0.9)",
+              border: "1px solid rgba(205,66,70,0.4)",
+              color: "var(--om-orange)",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            {Object.keys(sim.activeMissions).length} mission{Object.keys(sim.activeMissions).length > 1 ? "s" : ""} en route
+          </div>
+        )}
+
+        {/* Strike Log Panel */}
+        {sim.strikeLog.length > 0 && !activePairing && (
+          <StrikeLogPanel entries={sim.strikeLog} currentTick={sim.tick} />
+        )}
+
+        {/* No shooter available message */}
+        {noShooterMsg && (
+          <div
+            className="absolute bottom-4 right-4 z-40 px-4 py-2 rounded-sm text-[11px] font-semibold"
+            style={{
+              background: "rgba(205,66,70,0.15)",
+              border: "1px solid rgba(205,66,70,0.4)",
+              color: "var(--om-red-light)",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            No available shooter
+          </div>
+        )}
 
         {/* Context Menu */}
         {ctx.contextMenu && (

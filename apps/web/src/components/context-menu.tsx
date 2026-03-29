@@ -17,7 +17,7 @@ import { Crosshair, Move, Zap, Info } from "lucide-react";
 
 export interface ContextMenuState {
   type: "asset" | "map";
-  asset?: { asset_id: string; callsign: string; weapons: string[]; faction_id: string };
+  asset?: { asset_id: string; callsign: string; weapons: string[]; faction_id: string; is_ghost?: boolean };
   lngLat?: { lng: number; lat: number };
   x: number;
   y: number;
@@ -114,26 +114,15 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
               onClick={() => onAction("move", { assetId: asset.asset_id })}
             />
           )}
-          {isFriendly && asset.weapons.length > 0 && (
-            <div className="px-1">
-              <div className="px-2 pt-1.5 pb-0.5 text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em]">
-                Strike with
-              </div>
-              {asset.weapons.map((weapon) => (
-                <MenuItem
-                  key={weapon}
-                  icon={Zap}
-                  label={weapon}
-                  variant="danger"
-                  onClick={() =>
-                    onAction("strike", {
-                      weaponId: weapon,
-                      targetId: asset.asset_id,
-                    })
-                  }
-                />
-              ))}
-            </div>
+          {!isFriendly && !asset.is_ghost && (
+            <MenuItem
+              icon={Zap}
+              label="Strike"
+              variant="danger"
+              onClick={() =>
+                onAction("strike_target", { targetId: asset.asset_id })
+              }
+            />
           )}
           <MenuItem
             icon={Info}

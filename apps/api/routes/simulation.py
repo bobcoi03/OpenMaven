@@ -122,6 +122,26 @@ def _handle_ws_message(sim, message: dict) -> dict[str, Any] | None:
         )
         return {"type": "move_result", "data": result}
 
+    if msg_type == "strike_mission":
+        result = sim.command_strike_mission(
+            message.get("shooter_id", ""),
+            message.get("weapon_id", ""),
+            message.get("target_id", ""),
+        )
+        return {
+            "type": "strike_mission_result",
+            "data": {
+                **result,
+                "shooter_id": message.get("shooter_id", ""),
+                "weapon_id": message.get("weapon_id", ""),
+                "target_id": message.get("target_id", ""),
+            },
+        }
+
+    if msg_type == "abort_mission":
+        result = sim.command_abort_mission(message.get("mission_id", ""))
+        return {"type": "abort_mission_result", "data": result}
+
     if msg_type == "get_state":
         return {"type": "snapshot", "data": sim.get_snapshot()}
 

@@ -12,6 +12,7 @@ class AssetStatus(str, Enum):
     RTB = "rtb"  # returning to base
     HOLDING = "holding"
     MOVING = "moving"
+    ON_MISSION = "on_mission"
 
 
 class Position(BaseModel):
@@ -60,6 +61,7 @@ class SimAsset(BaseModel):
         self.health = max(0.0, self.health - damage_percent)
         if self.health <= 0:
             self.status = AssetStatus.DESTROYED
+            self.movement_order = None
         elif self.health < 0.5:
             self.status = AssetStatus.DAMAGED
 
@@ -67,3 +69,4 @@ class SimAsset(BaseModel):
         """Immediately destroy this asset."""
         self.health = 0.0
         self.status = AssetStatus.DESTROYED
+        self.movement_order = None

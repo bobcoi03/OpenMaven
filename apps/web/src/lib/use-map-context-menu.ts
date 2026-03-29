@@ -17,7 +17,7 @@ interface UseMapContextMenuOptions {
   onSelectAsset: (asset: SimAsset | null) => void;
   onStartMove: (assetId: string) => void;
   onStartMoveHere: (assetId: string, lng: number, lat: number) => void;
-  onStrike: (weaponId: string, targetId: string) => void;
+  onStrikeTarget: (targetId: string) => void;
 }
 
 interface UseMapContextMenuReturn {
@@ -38,7 +38,7 @@ export function useMapContextMenu({
   onSelectAsset,
   onStartMove,
   onStartMoveHere,
-  onStrike,
+  onStrikeTarget,
 }: UseMapContextMenuOptions): UseMapContextMenuReturn {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
@@ -74,15 +74,15 @@ export function useMapContextMenu({
         onStartMove(payload.assetId as string);
       }
 
-      if (action === "strike" && payload?.weaponId && payload?.targetId) {
-        onStrike(payload.weaponId as string, payload.targetId as string);
+      if (action === "strike_target" && payload?.targetId) {
+        onStrikeTarget(payload.targetId as string);
       }
 
       if (action === "move_here" && payload?.assetId && payload?.lat != null && payload?.lon != null) {
         onStartMoveHere(payload.assetId as string, payload.lon as number, payload.lat as number);
       }
     },
-    [assets, onSelectAsset, onStartMove, onStartMoveHere, onStrike],
+    [assets, onSelectAsset, onStartMove, onStartMoveHere, onStrikeTarget],
   );
 
   const close = useCallback(() => setContextMenu(null), []);
