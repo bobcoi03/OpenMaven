@@ -1,8 +1,12 @@
 /**
  * Bridge: convert SimAsset → TacticalAsset so the map renders live data.
+ *
+ * With fog of war enabled, enemy assets are only shown if detected by a
+ * friendly sensor.  Previously-detected enemies that left sensor range
+ * appear as "ghost" markers at their last known position.
  */
 
-import type { SimAsset } from "./use-simulation";
+import type { SimAsset, DetectionEntry, GhostEntry } from "./use-simulation";
 import type { TacticalAsset, AssetClass, AssetType, Affiliation } from "./tactical-mock";
 
 const TYPE_TO_CLASS: Record<string, AssetClass> = {
@@ -49,6 +53,8 @@ const TYPE_TO_CLASS: Record<string, AssetClass> = {
 const FACTION_TO_AFFILIATION: Record<string, Affiliation> = {
   blue: "friendly",
   red: "hostile",
+  isis: "hostile",
+  iran: "hostile",
   civilian: "neutral",
 };
 
@@ -62,6 +68,14 @@ function toMapType(assetType: string): AssetType {
   if (assetType.includes("Bridge")) return "Bridge";
   if (assetType.includes("Bus") || assetType.includes("Sedan")) return "Truck";
   return "Jet";
+}
+
+function isOwnFaction(factionId: string): boolean {
+  return factionId === "blue";
+}
+
+function isNeutral(factionId: string): boolean {
+  return factionId === "civilian";
 }
 
 export function simAssetToTactical(sim: SimAsset): TacticalAsset {
@@ -82,8 +96,64 @@ export function simAssetToTactical(sim: SimAsset): TacticalAsset {
   };
 }
 
-export function simAssetsToTactical(assets: Record<string, SimAsset>): TacticalAsset[] {
-  return Object.values(assets)
-    .filter((a) => a.status !== "destroyed")
-    .map(simAssetToTactical);
+/**
+ * Convert sim assets to tactical markers with fog of war filtering.
+ *
+ * - Blue assets: always visible
+ * - Civilian assets: always visible
+ * - Enemy assets: only visible if in the detections map
+ * - Ghost enemies: shown at last-known position with ghost=true flag
+ */
+export function simAssetsToTactical(
+  assets: Record<string, SimAsset>,
+  detections?: Record<string, DetectionEntry>,
+  ghosts?: Record<string, GhostEntry>,
+  currentTick?: number,
+): TacticalAsset[] {
+  const fogEnabled = detections !== undefined && Object.keys(detections).length > 0;
+  const result: TacticalAsset[] = [];
+
+  for (const asset of Object.values(assets)) {
+    if (asset.status === "destroyed") continue;
+
+    // Always show own faction + civilians
+    if (isOwnFaction(asset.faction_id) || isNeutral(asset.faction_id)) {
+      result.push(simAssetToTactical(asset));
+      continue;
+    }
+
+    // Enemy asset — only show if detected (when fog is active)
+    if (!fogEnabled) {
+      result.push(simAssetToTactical(asset));
+      continue;
+    }
+
+    const detection = detections[asset.asset_id];
+    if (detection) {
+      const tactical = simAssetToTactical(asset);
+      tactical.detection_confidence = detection.confidence;
+      tactical.detected_by = detection.sensor_asset_id;
+      result.push(tactical);
+    }
+  }
+
+  // Add ghost markers for enemies that left sensor range
+  if (fogEnabled && ghosts) {
+    for (const ghost of Object.values(ghosts)) {
+      const asset = assets[ghost.target_id];
+      if (!asset || asset.status === "destroyed") continue;
+
+      const tactical = simAssetToTactical(asset);
+      // Override position with last-known
+      tactical.latitude = ghost.last_lat;
+      tactical.longitude = ghost.last_lon;
+      tactical.is_ghost = true;
+      tactical.ghost_age_ticks = currentTick !== undefined
+        ? currentTick - ghost.last_seen_tick
+        : 0;
+      result.push(tactical);
+    }
+  }
+
+  return result;
 }

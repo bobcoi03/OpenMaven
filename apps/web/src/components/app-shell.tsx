@@ -18,7 +18,6 @@ import {
   FileText,
   SlidersHorizontal,
   Send,
-  Sparkles,
   Circle,
   Loader2,
   User,
@@ -139,7 +138,7 @@ function ToolStepRow({ step }: { step: ToolStep }) {
         )}
       </button>
       {open && (
-        <div className="px-2 py-1.5 border-t border-[var(--om-border)] text-[9px] font-mono text-[var(--om-text-muted)] max-h-24 overflow-y-auto">
+        <div className="px-2 py-1.5 border-t border-[var(--om-border)] text-[9px] text-[var(--om-text-muted)] max-h-24 overflow-y-auto">
           {step.args && Object.keys(step.args).length > 0 && (
             <div className="mb-1">
               <span className="text-[var(--om-text-disabled)]">args: </span>
@@ -531,7 +530,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <div className="text-[9px] text-[var(--om-text-muted)]">{description}</div>
                   </div>
 
-                  <span className={`text-[10px] font-mono shrink-0 ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-disabled)]"}`}>
+                  <span className={`text-[10px] shrink-0 ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-disabled)]"}`}>
                     {count.toLocaleString()}
                   </span>
                 </button>
@@ -553,7 +552,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ].map(([k, v]) => (
                 <div key={k} className="flex items-baseline justify-between">
                   <span className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.08em]">{k}</span>
-                  <span className="text-[9px] text-[var(--om-text-primary)] font-mono">{v}</span>
+                  <span className="text-[9px] text-[var(--om-text-primary)]">{v}</span>
                 </div>
               ))}
             </div>
@@ -567,11 +566,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Right Panel — AI Query */}
         <aside className="w-[300px] bg-[var(--om-bg-elevated)] border-l border-[var(--om-border)] flex flex-col shrink-0 z-10">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--om-border)]">
-            <Sparkles size={13} className="text-[var(--om-text-muted)]" />
-            <span className="text-[11px] font-semibold text-[var(--om-text-primary)] tracking-wide">Query</span>
-          </div>
-
           {/* Messages area */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {messages.length === 0 ? (
@@ -740,11 +734,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ].map((item) => (
           <div key={item.label} className="flex items-center gap-1.5 text-[10px] shrink-0">
             <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: item.color }} />
-            <span className="font-semibold font-[family-name:var(--font-mono)]" style={{ color: item.color }}>{item.count}</span>
+            <span className="font-semibold" style={{ color: item.color }}>{item.count}</span>
             <span className="text-[var(--om-text-muted)]">{item.label}</span>
           </div>
         ))}
-        <div className="ml-auto text-[10px] text-[var(--om-text-muted)] font-[family-name:var(--font-mono)] shrink-0">
+        <div className="ml-auto text-[10px] text-[var(--om-text-muted)] shrink-0">
           v0.1.0
         </div>
       </footer>

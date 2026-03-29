@@ -11,7 +11,7 @@
  * Must be loaded via next/dynamic with ssr:false — maplibre-gl is browser-only.
  */
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import ms from "milsymbol";
 import type { TacticalAsset, AssetClass } from "@/lib/tactical-mock";
@@ -67,7 +67,7 @@ interface TacticalMapProps {
   className?: string;
   onContextMenu?: (event: {
     type: "asset" | "map";
-    asset?: { asset_id: string; callsign: string; weapons: string[] };
+    asset?: { asset_id: string; callsign: string; weapons: string[]; faction_id: string };
     lngLat?: { lng: number; lat: number };
     x: number;
     y: number;
@@ -80,6 +80,10 @@ interface TacticalMapProps {
   } | null;
   /** Called when the destination endpoint is dragged to a new position. */
   onMovePathDrag?: (lngLat: { lng: number; lat: number }) => void;
+  /** Sensor range circles: array of {lng, lat, range_km} */
+  sensorRanges?: Array<{ lng: number; lat: number; range_km: number }>;
+  /** Asset ID being moved, or null. Used for cursor + preview line. */
+  moveMode?: string | null;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -95,6 +99,8 @@ export function MapViewInner({
   onMapClick,
   movePath,
   onMovePathDrag,
+  moveMode,
+  sensorRanges,
 }: TacticalMapProps) {
   const containerRef        = useRef<HTMLDivElement>(null);
   const mapRef              = useRef<maplibregl.Map | null>(null);
@@ -158,6 +164,78 @@ export function MapViewInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapStyle]);
 
+  // ── Cursor + preview line for move mode ─────────────────────────────────────
+  // When moveMode is set but no destination chosen yet, draw a dashed line
+  // from the asset to the cursor. Runs entirely in MapLibre (no React re-renders).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    map.getCanvas().style.cursor = moveMode ? "crosshair" : "";
+
+    // Only show preview when in move mode without a locked destination
+    if (!moveMode || movePath) return;
+
+    const PREVIEW_SOURCE = "move-preview-source";
+    const PREVIEW_LAYER = "move-preview-layer";
+
+    // Find the asset's current position from our markers
+    const entry = markersRef.current.get(moveMode);
+    if (!entry) return;
+    const origin: [number, number] = [entry.asset.longitude, entry.asset.latitude];
+
+    function ensureLayer() {
+      if (!map || map.getSource(PREVIEW_SOURCE)) return;
+      map.addSource(PREVIEW_SOURCE, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: PREVIEW_LAYER,
+        type: "line",
+        source: PREVIEW_SOURCE,
+        paint: {
+          "line-color": "#2D72D2",
+          "line-width": 1.5,
+          "line-dasharray": [4, 4],
+          "line-opacity": 0.45,
+        },
+      });
+    }
+
+    function onMouseMove(e: maplibregl.MapMouseEvent) {
+      if (!map) return;
+      ensureLayer();
+      const source = map.getSource(PREVIEW_SOURCE) as maplibregl.GeoJSONSource | undefined;
+      if (!source) return;
+      source.setData({
+        type: "FeatureCollection",
+        features: [{
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: [origin, [e.lngLat.lng, e.lngLat.lat]],
+          },
+          properties: {},
+        }],
+      });
+    }
+
+    if (map.loaded() && map.isStyleLoaded()) {
+      ensureLayer();
+    }
+    map.on("mousemove", onMouseMove);
+
+    return () => {
+      map.off("mousemove", onMouseMove);
+      try {
+        if (map.getLayer(PREVIEW_LAYER)) map.removeLayer(PREVIEW_LAYER);
+        if (map.getSource(PREVIEW_SOURCE)) map.removeSource(PREVIEW_SOURCE);
+      } catch { /* map removed */ }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moveMode, movePath]);
+
   // ── Sync markers — add/remove/update without full rebuild ──────────────────
   useEffect(() => {
     const map = mapRef.current;
@@ -178,17 +256,34 @@ export function MapViewInner({
       });
 
       for (const asset of visible) {
-        const existing = markersRef.current.get(asset.asset_id);
+        // Ghost markers get a unique key so they don't collide with the real detection
+        const markerId = asset.is_ghost ? `ghost-${asset.asset_id}` : asset.asset_id;
+
+        const existing = markersRef.current.get(markerId);
 
         if (existing) {
           existing.marker.setLngLat([asset.longitude, asset.latitude]);
           existing.asset = asset;
+          // Update ghost opacity based on age
+          if (asset.is_ghost) {
+            const age = asset.ghost_age_ticks ?? 0;
+            const opacity = Math.max(0.15, 1.0 - age / 60);
+            existing.marker.getElement().style.opacity = String(opacity);
+          }
           continue;
         }
 
         // Build marker element: NATO symbol + callsign label
         const el = document.createElement("div");
         el.style.cssText = "cursor:pointer;display:flex;flex-direction:column;align-items:center;";
+
+        // Ghost styling: faded, pulsing dashed border
+        if (asset.is_ghost) {
+          const age = asset.ghost_age_ticks ?? 0;
+          const opacity = Math.max(0.15, 1.0 - age / 60);
+          el.style.opacity = String(opacity);
+          el.style.filter = "saturate(0.3)";
+        }
 
         const inner = document.createElement("div");
         inner.style.cssText = "transition:transform 120ms ease,filter 120ms ease;line-height:0;";
@@ -197,7 +292,13 @@ export function MapViewInner({
 
         // Callsign label below the symbol
         const label = document.createElement("div");
-        label.textContent = asset.callsign;
+        const ghostSuffix = asset.is_ghost
+          ? ` (${Math.round((asset.ghost_age_ticks ?? 0) * 10)}s ago)`
+          : "";
+        const confidenceSuffix = !asset.is_ghost && asset.detection_confidence !== undefined
+          ? ` ${Math.round(asset.detection_confidence * 100)}%`
+          : "";
+        label.textContent = asset.callsign + confidenceSuffix + ghostSuffix;
         label.style.cssText =
           "font-size:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,monospace;font-weight:600;" +
           "color:#d4d4d8;text-shadow:0 1px 3px rgba(0,0,0,0.9);" +
@@ -240,6 +341,7 @@ export function MapViewInner({
                 asset_id: entry.asset.asset_id,
                 callsign: entry.asset.callsign,
                 weapons: entry.asset.weapons ?? [],
+                faction_id: entry.asset.faction_id,
               },
               x,
               y,
@@ -247,7 +349,7 @@ export function MapViewInner({
           }
         });
 
-        markersRef.current.set(asset.asset_id, { marker, asset });
+        markersRef.current.set(markerId, { marker, asset });
       }
     }
 
@@ -376,6 +478,72 @@ export function MapViewInner({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [movePath?.from[0], movePath?.from[1], movePath?.to[0], movePath?.to[1]]);
+
+  // ── Sensor range circles ───────────────────────────────────────────────────
+  // Store latest ranges in a ref so the style listener can access current data
+  const sensorRangesRef = useRef(sensorRanges);
+  sensorRangesRef.current = sensorRanges;
+
+  // Stable draw function — reads from ref so it always has fresh data
+  const drawSensorRanges = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const SOURCE_ID = "sensor-ranges-source";
+    const FILL_LAYER = "sensor-ranges-fill";
+    const STROKE_LAYER = "sensor-ranges-stroke";
+
+    const features: GeoJSON.Feature[] = (sensorRangesRef.current ?? []).map((s) => {
+      const points: [number, number][] = [];
+      const steps = 64;
+      for (let i = 0; i <= steps; i++) {
+        const angle = (i / steps) * 2 * Math.PI;
+        const dLat = (s.range_km / 111.32) * Math.sin(angle);
+        const dLng = (s.range_km / (111.32 * Math.cos((s.lat * Math.PI) / 180))) * Math.cos(angle);
+        points.push([s.lng + dLng, s.lat + dLat]);
+      }
+      return {
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [points] },
+        properties: {},
+      };
+    });
+
+    const geojson: GeoJSON.FeatureCollection = { type: "FeatureCollection", features };
+
+    const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (source) {
+      source.setData(geojson);
+    } else {
+      map.addSource(SOURCE_ID, { type: "geojson", data: geojson });
+      map.addLayer({
+        id: FILL_LAYER,
+        type: "fill",
+        source: SOURCE_ID,
+        paint: { "fill-color": "#2D72D2", "fill-opacity": 0.04 },
+      });
+      map.addLayer({
+        id: STROKE_LAYER,
+        type: "line",
+        source: SOURCE_ID,
+        paint: { "line-color": "#2D72D2", "line-width": 1, "line-opacity": 0.15 },
+      });
+    }
+  }, []);
+
+  // Redraw whenever sensor positions change (every tick for moving assets)
+  useEffect(() => {
+    drawSensorRanges();
+  }, [sensorRanges, drawSensorRanges]);
+
+  // Re-apply after style changes (setStyle nukes all sources/layers)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const handler = () => drawSensorRanges();
+    map.on("styledata", handler);
+    return () => { map.off("styledata", handler); };
+  }, [drawSensorRanges]);
 
   return <div ref={containerRef} className={`w-full h-full ${className}`} onContextMenu={(e) => e.preventDefault()} />;
 }

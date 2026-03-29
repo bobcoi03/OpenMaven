@@ -17,7 +17,7 @@ import { Crosshair, Move, Zap, Info } from "lucide-react";
 
 export interface ContextMenuState {
   type: "asset" | "map";
-  asset?: { asset_id: string; callsign: string; weapons: string[] };
+  asset?: { asset_id: string; callsign: string; weapons: string[]; faction_id: string };
   lngLat?: { lng: number; lat: number };
   x: number;
   y: number;
@@ -92,6 +92,7 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
 
   if (state.type === "asset" && state.asset) {
     const { asset } = state;
+    const isFriendly = asset.faction_id === "blue";
     return (
       <div
         ref={menuRef}
@@ -100,18 +101,20 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
       >
         {/* Header */}
         <div className="px-3 py-1.5 bg-[var(--om-bg-primary)] border-b border-[var(--om-border)]">
-          <div className="text-[10px] font-semibold text-[var(--om-blue-light)] tracking-wide">
+          <div className={`text-[10px] font-semibold tracking-wide ${isFriendly ? "text-[var(--om-blue-light)]" : "text-[var(--om-red-light)]"}`}>
             {asset.callsign}
           </div>
         </div>
 
         <div className="py-1">
-          <MenuItem
-            icon={Move}
-            label="Move to..."
-            onClick={() => onAction("move", { assetId: asset.asset_id })}
-          />
-          {asset.weapons.length > 0 && (
+          {isFriendly && (
+            <MenuItem
+              icon={Move}
+              label="Move to..."
+              onClick={() => onAction("move", { assetId: asset.asset_id })}
+            />
+          )}
+          {isFriendly && asset.weapons.length > 0 && (
             <div className="px-1">
               <div className="px-2 pt-1.5 pb-0.5 text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em]">
                 Strike with
@@ -153,7 +156,7 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
       >
         {/* Header */}
         <div className="px-3 py-1.5 bg-[var(--om-bg-primary)] border-b border-[var(--om-border)]">
-          <div className="text-[9px] text-[var(--om-text-muted)] font-mono">
+          <div className="text-[9px] text-[var(--om-text-muted)]">
             {lngLat.lat.toFixed(4)}, {lngLat.lng.toFixed(4)}
           </div>
         </div>

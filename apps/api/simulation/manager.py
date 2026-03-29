@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from simulation.assets import AssetStatus, MovementOrder, Position, SimAsset
 from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
+from simulation.detection import SensorReading, compute_detections
 from simulation.rules import (
     DependencyLink,
     bearing_degrees,
@@ -39,6 +40,26 @@ class SimSpeed(float, Enum):
 # ── State diff (broadcast to clients each tick) ─────────────────────────────
 
 
+class DetectionEntry(BaseModel):
+    """A detected enemy visible to the player this tick."""
+
+    target_id: str
+    confidence: float
+    sensor_asset_id: str
+    lat: float
+    lon: float
+
+
+class GhostEntry(BaseModel):
+    """A previously detected enemy no longer in sensor range."""
+
+    target_id: str
+    last_lat: float
+    last_lon: float
+    last_seen_tick: int
+    confidence_at_loss: float
+
+
 class StateDiff(BaseModel):
     """Changes from a single tick, sent to clients via WebSocket."""
 
@@ -46,6 +67,8 @@ class StateDiff(BaseModel):
     asset_updates: list[dict[str, Any]]
     events_fired: list[dict[str, Any]]
     alerts: list[str]
+    detections: list[DetectionEntry] = []
+    ghosts: list[GhostEntry] = []
 
 
 # ── Manager ──────────────────────────────────────────────────────────────────
@@ -59,6 +82,9 @@ class SimulationManager:
     WebSocket clients mutate state here.
     """
 
+    # Ghosts expire after this many ticks without re-detection
+    GHOST_EXPIRY_TICKS: int = 60
+
     def __init__(self, tick_duration_s: float = 10.0) -> None:
         self.tick: int = 0
         self.speed: SimSpeed = SimSpeed.NORMAL
@@ -70,6 +96,10 @@ class SimulationManager:
         self.dependencies: list[DependencyLink] = []
         self.event_queue: EventQueue = EventQueue()
         self.event_log: list[SimEvent] = []
+
+        # Fog of war state
+        self._detected: dict[str, SensorReading] = {}  # currently detected enemies
+        self._ghosts: dict[str, GhostEntry] = {}  # last-known positions
 
         self._task: asyncio.Task[None] | None = None
         self._broadcast_fn: Any = None  # set externally by WebSocket manager
@@ -119,7 +149,78 @@ class SimulationManager:
             "assets": {k: v.model_dump() for k, v in self.assets.items()},
             "factions": {k: v.model_dump() for k, v in self.factions.items()},
             "pending_events": self.event_queue.pending_count,
+            "detections": [
+                DetectionEntry(
+                    target_id=r.target_id,
+                    confidence=r.confidence,
+                    sensor_asset_id=r.sensor_asset_id,
+                    lat=r.lat,
+                    lon=r.lon,
+                ).model_dump()
+                for r in self._detected.values()
+            ],
+            "ghosts": [g.model_dump() for g in self._ghosts.values()],
         }
+
+    # ── Fog of war ─────────────────────────────────────────────────────────
+
+    def _tick_detections(self) -> tuple[list[DetectionEntry], list[GhostEntry]]:
+        """Run sensor detection for the blue faction against all hostiles."""
+        blue_sensors = {
+            aid: a for aid, a in self.assets.items()
+            if a.faction_id == "blue" and a.is_alive()
+        }
+        hostile_targets = {
+            aid: a for aid, a in self.assets.items()
+            if a.faction_id not in ("blue", "civilian") and a.is_alive()
+        }
+
+        readings = compute_detections(blue_sensors, hostile_targets)
+        detected_ids = {r.target_id for r in readings}
+
+        # Update detection state
+        new_detected: dict[str, SensorReading] = {}
+        for r in readings:
+            new_detected[r.target_id] = r
+
+        # Transition: previously detected but now lost → ghost
+        for tid, old_reading in self._detected.items():
+            if tid not in detected_ids:
+                self._ghosts[tid] = GhostEntry(
+                    target_id=tid,
+                    last_lat=old_reading.lat,
+                    last_lon=old_reading.lon,
+                    last_seen_tick=self.tick - 1,
+                    confidence_at_loss=old_reading.confidence,
+                )
+
+        # Remove ghosts that got re-detected
+        for tid in detected_ids:
+            self._ghosts.pop(tid, None)
+
+        # Expire old ghosts
+        expired = [
+            tid for tid, g in self._ghosts.items()
+            if self.tick - g.last_seen_tick > self.GHOST_EXPIRY_TICKS
+        ]
+        for tid in expired:
+            del self._ghosts[tid]
+
+        self._detected = new_detected
+
+        detection_entries = [
+            DetectionEntry(
+                target_id=r.target_id,
+                confidence=r.confidence,
+                sensor_asset_id=r.sensor_asset_id,
+                lat=r.lat,
+                lon=r.lon,
+            )
+            for r in readings
+        ]
+        ghost_entries = list(self._ghosts.values())
+
+        return detection_entries, ghost_entries
 
     # ── Commands ──────────────────────────────────────────────────────────
 
@@ -296,11 +397,16 @@ class SimulationManager:
                 events_fired.append(event.model_dump())
                 self.event_log.append(event)
 
+        # 3. Fog of war — run detection
+        detection_entries, ghost_entries = self._tick_detections()
+
         return StateDiff(
             tick=self.tick,
             asset_updates=asset_updates,
             events_fired=events_fired,
             alerts=alerts,
+            detections=detection_entries,
+            ghosts=ghost_entries,
         )
 
     def _tick_movement(self, asset: SimAsset) -> dict[str, Any] | None:
