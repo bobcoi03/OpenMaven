@@ -20,6 +20,8 @@ def load_default_scenario() -> SimulationManager:
     _add_factions(mgr)
     _add_blue_assets(mgr)
     _add_red_assets(mgr)
+    _add_isis_assets(mgr)
+    _add_iran_assets(mgr)
     _add_civilian_assets(mgr)
     _add_dependencies(mgr)
 
@@ -60,6 +62,30 @@ def _add_factions(mgr: SimulationManager) -> None:
     ))
 
     mgr.add_faction(Faction(
+        faction_id="isis",
+        name="Islamic State (ISIS/ISIL)",
+        side="red",
+        doctrine=Doctrine.GUERRILLA,
+        leadership=[
+            Leader(leader_id="isis-l1", name="Abu Anas al-Shami", rank="Emir"),
+        ],
+        retaliation_threshold=0.1,
+        resources=Resources(fuel=0.4, ammo=0.6, manpower=0.5),
+    ))
+
+    mgr.add_faction(Faction(
+        faction_id="iran",
+        name="IRGC / Proxy Forces",
+        side="red",
+        doctrine=Doctrine.AGGRESSIVE,
+        leadership=[
+            Leader(leader_id="iran-l1", name="Maj. Gen. Qaani", rank="Major General"),
+        ],
+        retaliation_threshold=0.25,
+        resources=Resources(fuel=0.6, ammo=0.7, manpower=0.6),
+    ))
+
+    mgr.add_faction(Faction(
         faction_id="civilian",
         name="Civilian Population",
         side="civilian",
@@ -77,6 +103,16 @@ _MAX_SPEEDS: dict[str, float] = {
     "Technical (Armed Pickup)": 100, "M977 HEMTT Supply Truck": 90,
     "Civilian Bus": 60, "Civilian Sedan": 120,
     "Infantry Squad": 8,
+    # ── Russian expanded OPFOR ───────────────────────────────────────────
+    "T-90M Proryv MBT": 60, "T-14 Armata MBT": 80, "BMP-3 IFV": 70,
+    "Su-35S Flanker-E": 2390, "Su-34 Fullback": 1900, "Su-57 Felon": 2600,
+    "Ka-52 Alligator": 300, "Mi-28NM Night Hunter": 305,
+    "Pantsir-S1": 90, "Iskander-M": 70,
+    # ── ISIS ─────────────────────────────────────────────────────────────
+    "Toyota Hilux Technical (HMG)": 170, "Captured T-55": 50,
+    "ZU-23-2 AA Gun": 30, "RPG-7 Team": 8,
+    # ── Iran ─────────────────────────────────────────────────────────────
+    "Shahed-136 Loitering Munition": 185,
 }
 
 
@@ -203,6 +239,35 @@ def _add_red_assets(mgr: SimulationManager) -> None:
         ("GROWLER-01", "S-400 Triumf SAM", 35.45, 40.05, 250, 0.0, 0, "91N6E Radar", ["sam_missile"]),
         # Second S-400 near Raqqa (35.95°N, 39.01°E)
         ("GROWLER-02", "S-400 Triumf SAM", 35.90, 39.05, 280, 0.0, 0, "91N6E Radar", ["sam_missile"]),
+
+        # ── Advanced Russian OPFOR ─────────────────────────────────────
+        # T-90M near Deir ez-Zor — heavier armor replacing T-72s
+        ("HOSTILE-T90-01", "T-90M Proryv MBT", 35.30, 40.10, 210, 90.0, 0, "Kalina FCS", ["small_arms"]),
+        ("HOSTILE-T90-02", "T-90M Proryv MBT", 35.28, 40.12, 210, 270.0, 0, "Kalina FCS", ["small_arms"]),
+        # T-14 Armata — elite armor, west of Deir ez-Zor
+        ("HOSTILE-ARM-01", "T-14 Armata MBT", 35.36, 39.90, 215, 180.0, 0, "Sh042 AESA", ["small_arms"]),
+        # BMP-3 IFVs on road south toward Al-Mayadin
+        ("HOSTILE-BMP3-01", "BMP-3 IFV", 35.10, 40.30, 198, 200.0, 0, None, ["autocannon_30mm"]),
+        ("HOSTILE-BMP3-02", "BMP-3 IFV", 35.08, 40.35, 195, 200.0, 0, None, ["autocannon_30mm"]),
+        # BTR-82A motorized infantry near Raqqa
+        ("HOSTILE-BTR-01", "BTR-82A APC", 35.90, 39.10, 300, 180.0, 45, None, ["autocannon_30mm"]),
+        # Ka-52 pair — airborne strike, southeast of Raqqa
+        ("ROGUE-KA52-01", "Ka-52 Alligator", 35.65, 39.80, 850, 145.0, 265, "mmW Radar", ["hellfire"]),
+        ("ROGUE-KA52-02", "Ka-52 Alligator", 35.60, 39.88, 780, 160.0, 240, "mmW Radar", ["hellfire"]),
+        # Mi-28NM — night attack helicopter, Euphrates Valley
+        ("ROGUE-MI28-01", "Mi-28NM Night Hunter", 35.55, 40.02, 920, 95.0, 280, "N025E AESA", ["hellfire"]),
+        # Su-35S — CAP over northern Syria
+        ("BANDIT-SU35-01", "Su-35S Flanker-E", 36.20, 39.50, 9800, 270.0, 1200, "Irbis-E PESA", ["sam_missile"]),
+        ("BANDIT-SU35-02", "Su-35S Flanker-E", 36.10, 39.80, 10200, 90.0, 1150, "Irbis-E PESA", ["sam_missile"]),
+        # Su-34 — strike package inbound from northwest
+        ("BANDIT-SU34-01", "Su-34 Fullback", 35.90, 38.80, 8500, 135.0, 950, "Leninets B004", ["cruise_missile", "gbu_12_paveway"]),
+        # Su-57 — stealth deep strike, eastern Syria
+        ("SHADOW-SU57-01", "Su-57 Felon", 35.40, 41.20, 11000, 270.0, 1800, "Sh121 AESA", ["cruise_missile"]),
+        # Pantsir-S1 SHORAD batteries — near Raqqa and Deir ez-Zor
+        ("SHIELD-PAN-01", "Pantsir-S1", 35.94, 39.05, 285, 0.0, 0, "1RS2-1E Array", ["sam_missile"]),
+        ("SHIELD-PAN-02", "Pantsir-S1", 35.25, 40.08, 215, 0.0, 0, "1RS2-1E Array", ["sam_missile"]),
+        # Iskander-M TEL — set back near Palmyra (34.56°N, 38.27°E)
+        ("STRIKE-ISK-01", "Iskander-M", 34.55, 38.28, 400, 0.0, 0, "GLONASS/INS", ["ballistic_missile"]),
     ]
 
     for callsign, atype, lat, lon, alt, hdg, spd, sensor, weapons in red_assets:
@@ -248,6 +313,77 @@ def _add_civilian_assets(mgr: SimulationManager) -> None:
             position=Position(latitude=lat, longitude=lon, altitude_m=alt, heading_deg=hdg),
             speed_kmh=spd,
             max_speed_kmh=max(spd, _MAX_SPEEDS.get(atype, spd)),
+        ))
+
+
+# ── ISIS Assets ──────────────────────────────────────────────────────────────
+
+
+def _add_isis_assets(mgr: SimulationManager) -> None:
+    """ISIS/ISIL assets in eastern Syria and along the Iraq-Syria border.
+
+    Positions:
+    - Al-Qa'im border crossing area (~34.36°N, 41.00°E)
+    - Raqqa outskirts (~35.90°N, 39.00°E)
+    - Al-Mayadin corridor (~35.04°N, 40.48°E)
+    """
+    isis_assets = [
+        # Hilux Technicals — Al-Qa'im border area
+        ("ISIS-TECH-01", "Toyota Hilux Technical (HMG)", 34.36, 41.00, 190, 280.0, 70, None, ["small_arms"]),
+        ("ISIS-TECH-02", "Toyota Hilux Technical (HMG)", 34.38, 40.95, 190, 100.0, 65, None, ["small_arms"]),
+        # Hilux Technical — near Raqqa outskirts
+        ("ISIS-TECH-03", "Toyota Hilux Technical (HMG)", 35.92, 39.08, 295, 210.0, 60, None, ["small_arms"]),
+        # Captured T-55 — Raqqa west (ISIS operated captured Syrian armor)
+        ("ISIS-T55-01", "Captured T-55", 35.88, 38.98, 292, 90.0, 0, None, ["small_arms"]),
+        # ZU-23-2 — dual ground/AA role near Al-Mayadin and Al-Qa'im
+        ("ISIS-ZU23-01", "ZU-23-2 AA Gun", 35.04, 40.48, 196, 0.0, 0, None, ["autocannon_30mm"]),
+        ("ISIS-ZU23-02", "ZU-23-2 AA Gun", 34.42, 40.96, 192, 0.0, 0, None, ["autocannon_30mm"]),
+        # RPG-7 teams on forward contact line
+        ("ISIS-RPG-01", "RPG-7 Team", 34.40, 40.97, 190, 0.0, 5, None, ["small_arms"]),
+        ("ISIS-RPG-02", "RPG-7 Team", 35.91, 39.05, 298, 0.0, 5, None, ["small_arms"]),
+    ]
+
+    for callsign, atype, lat, lon, alt, hdg, spd, sensor, weapons in isis_assets:
+        mgr.add_asset(SimAsset(
+            asset_id=f"isis-{callsign.lower()}",
+            callsign=callsign,
+            asset_type=atype,
+            faction_id="isis",
+            position=Position(latitude=lat, longitude=lon, altitude_m=alt, heading_deg=hdg),
+            speed_kmh=spd,
+            max_speed_kmh=max(spd, _MAX_SPEEDS.get(atype, spd)),
+            sensor_type=sensor,
+            weapons=weapons,
+        ))
+
+
+# ── Iran Assets ───────────────────────────────────────────────────────────────
+
+
+def _add_iran_assets(mgr: SimulationManager) -> None:
+    """IRGC / Iranian proxy assets — Shahed-136 swarm inbound from the east.
+
+    Launched from the Iraq-Syria border area (~34.28°N, 41.30°E),
+    flying northwest at low altitude toward coalition positions near Al-Bukamal.
+    """
+    iran_assets = [
+        # Shahed-136 swarm — three drones in loose formation
+        ("IRAN-SHA-01", "Shahed-136 Loitering Munition", 34.28, 41.30, 500, 315.0, 185, "GPS/INS", []),
+        ("IRAN-SHA-02", "Shahed-136 Loitering Munition", 34.25, 41.35, 480, 310.0, 185, "GPS/INS", []),
+        ("IRAN-SHA-03", "Shahed-136 Loitering Munition", 34.30, 41.25, 520, 320.0, 185, "GPS/INS", []),
+    ]
+
+    for callsign, atype, lat, lon, alt, hdg, spd, sensor, weapons in iran_assets:
+        mgr.add_asset(SimAsset(
+            asset_id=f"iran-{callsign.lower()}",
+            callsign=callsign,
+            asset_type=atype,
+            faction_id="iran",
+            position=Position(latitude=lat, longitude=lon, altitude_m=alt, heading_deg=hdg),
+            speed_kmh=spd,
+            max_speed_kmh=max(spd, _MAX_SPEEDS.get(atype, spd)),
+            sensor_type=sensor,
+            weapons=weapons,
         ))
 
 
