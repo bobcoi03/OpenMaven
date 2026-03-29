@@ -9,6 +9,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from detection.detection_engine import process_assets
+from detection.models import Asset as DetectionAsset, Detection, Target, TargetStage, TargetingBoard
+from detection.targeting_board import auto_triage, create_target
 from simulation.assets import AssetStatus, MovementOrder, Position, SimAsset
 from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
@@ -24,6 +27,40 @@ from simulation.rules import (
 
 logger = logging.getLogger(__name__)
 
+def _derive_asset_class(asset_type: str) -> str:
+    """Map a SimAsset type string to a detection Asset class."""
+    t = asset_type.lower()
+    if any(k in t for k in ("truck", "supply", "fuel", "depot", "convoy")):
+        return "Logistics"
+    if any(k in t for k in ("plant", "pump", "hospital", "base", "station")):
+        return "Infrastructure"
+    return "Military"
+
+
+def _serialize_detection(detection: Detection) -> dict[str, Any]:
+    return {
+        "detection_id": str(detection.detection_id),
+        "timestamp": detection.timestamp.isoformat(),
+        "asset_id": detection.asset_id,
+        "asset_type": detection.asset_type,
+        "confidence": detection.confidence,
+        "grid_ref": detection.grid_ref,
+        "lat": detection.lat,
+        "lon": detection.lon,
+        "source_label": detection.source_label,
+        "classification": detection.classification,
+    }
+
+
+def _serialize_target(target: Target) -> dict[str, Any]:
+    return {
+        "target_id": target.target_id,
+        "stage": target.stage.value,
+        "created_at": target.created_at.isoformat(),
+        "updated_at": target.updated_at.isoformat(),
+        "detection": _serialize_detection(target.detection),
+        "history": [[stage.value, ts.isoformat()] for stage, ts in target.history],
+    }
 
 # ── Speed control ────────────────────────────────────────────────────────────
 
@@ -70,6 +107,8 @@ class SimulationManager:
         self.dependencies: list[DependencyLink] = []
         self.event_queue: EventQueue = EventQueue()
         self.event_log: list[SimEvent] = []
+        self.targeting_board: TargetingBoard = TargetingBoard()
+        self._rng: random.Random = random.Random()
 
         self._task: asyncio.Task[None] | None = None
         self._broadcast_fn: Any = None  # set externally by WebSocket manager
@@ -259,6 +298,57 @@ class SimulationManager:
                 if speed > 0:
                     self.assign_patrol(asset_id)
 
+    def _run_detection_tick(self) -> dict[str, Any]:
+        """Run detection on hostile assets, update the targeting board, and return payload."""
+        red_faction_ids = {
+            fid for fid, faction in self.factions.items() if faction.side == "red"
+        }
+
+        detection_assets: dict[str, DetectionAsset] = {}
+        for sim_asset in self.assets.values():
+            if sim_asset.faction_id not in red_faction_ids:
+                continue
+            if not sim_asset.is_alive():
+                continue
+            detection_assets[sim_asset.asset_id] = DetectionAsset(
+                asset_id=sim_asset.asset_id,
+                asset_type=sim_asset.asset_type,
+                asset_class=_derive_asset_class(sim_asset.asset_type),
+                latitude=sim_asset.position.latitude,
+                longitude=sim_asset.position.longitude,
+                heading_deg=sim_asset.position.heading_deg,
+                speed_kmh=sim_asset.speed_kmh,
+            )
+
+        detections = process_assets(detection_assets, self._rng)
+
+        active_asset_ids = {
+            target.detection.asset_id
+            for target in self.targeting_board.targets.values()
+            if target.stage != TargetStage.COMPLETE
+        }
+
+        new_detections = [
+            detection for detection in detections
+            if detection.asset_id not in active_asset_ids
+        ]
+
+        for detection in new_detections:
+            self.targeting_board = create_target(detection, self.targeting_board)
+
+        self.targeting_board = auto_triage(self.targeting_board)
+
+        return {
+            "board_state": [
+                _serialize_target(target)
+                for target in self.targeting_board.targets.values()
+            ],
+            "new_detections": [
+                _serialize_detection(detection)
+                for detection in new_detections
+            ],
+        }
+
     # ── Tick loop ─────────────────────────────────────────────────────────
 
     async def _tick_loop(self) -> None:
@@ -271,9 +361,11 @@ class SimulationManager:
             interval = self.tick_duration_s / self.speed.value
             await asyncio.sleep(interval)
             diff = self._advance_tick()
+            detection_payload = self._run_detection_tick()
 
             if self._broadcast_fn is not None:
                 await self._broadcast_fn({"type": "diff", "data": diff.model_dump()})
+                await self._broadcast_fn({"type": "detections", "data": detection_payload})
 
     def _advance_tick(self) -> StateDiff:
         """Process one simulation tick."""
