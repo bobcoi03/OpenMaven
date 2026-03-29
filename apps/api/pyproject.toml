@@ -20,6 +20,7 @@ dependencies = [
     "openai>=1.0.0",
     "graphiti-core>=0.28.2",
     "neo4j-graphrag>=1.14.0",
+    "mgrs>=1.4.0",
 ]
 
 [dependency-groups]
