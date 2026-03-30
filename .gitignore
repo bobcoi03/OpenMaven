@@ -40,3 +40,4 @@ neo4j_data/
 .pytest_cache/
 htmlcov/
 .coverage
+.worktrees/
