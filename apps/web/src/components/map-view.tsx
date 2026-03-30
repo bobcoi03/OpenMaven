@@ -20,7 +20,7 @@ export interface MapViewProps {
   className?: string;
   onContextMenu?: (event: {
     type: "asset" | "map";
-    asset?: { asset_id: string; callsign: string; weapons: string[] };
+    asset?: { asset_id: string; callsign: string; weapons: string[]; faction_id: string; is_ghost?: boolean };
     lngLat?: { lng: number; lat: number };
     x: number;
     y: number;
@@ -31,6 +31,17 @@ export interface MapViewProps {
     to: [number, number];
   } | null;
   onMovePathDrag?: (lngLat: { lng: number; lat: number }) => void;
+  sensorRanges?: Array<{ lng: number; lat: number; range_km: number }>;
+  showSensorRanges?: boolean;
+  /** Asset ID being moved, or null. Used for cursor + preview line. */
+  moveMode?: string | null;
+  /** Red dashed line from shooter to target for active strike pairing. */
+  strikeLine?: { from: [number, number]; to: [number, number] } | null;
+  strikeLines?: Array<{ from: [number, number]; to: [number, number] }>;
+  /** Yellow dashed lines showing AI-planned strikes (before execution). */
+  plannedLines?: Array<{ from: [number, number]; to: [number, number] }> | null;
+  /** Blue dotted lines showing movement orders (current position → destination). */
+  movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
 }
 
 const MapViewInner = dynamic(

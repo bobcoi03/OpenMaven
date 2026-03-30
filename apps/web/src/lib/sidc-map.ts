@@ -89,9 +89,25 @@ const TYPE_SIDC: Record<string, string> = {
   "USS Seawolf SSN-21":     "UPSLA-----",  // Subsurface, Attack Sub
 };
 
-/** Build a full 15-char SIDC for a given asset type and affiliation. */
-export function getSidc(assetType: string, affiliation: Affiliation): string {
+/** Status → SIDC position 4 character */
+const STATUS_CHAR: Record<string, string> = {
+  destroyed: "X",
+  damaged: "D",
+};
+
+/** Build a full 15-char SIDC for a given asset type, affiliation, and status. */
+export function getSidc(
+  assetType: string,
+  affiliation: Affiliation,
+  status?: string,
+): string {
   const aff = AFF_CHAR[affiliation];
   const partial = TYPE_SIDC[assetType] ?? "GPUCI-----"; // fallback: ground infantry
+  // Replace position 4 (status char, currently 'P') with damaged/destroyed if applicable
+  const statusChar = status ? STATUS_CHAR[status] : undefined;
+  if (statusChar) {
+    // partial format: dimension(1) + 'P'(1) + function(8) = 10 chars
+    return `S${aff}${partial[0]}${statusChar}${partial.slice(2)}`;
+  }
   return `S${aff}${partial}`;
 }

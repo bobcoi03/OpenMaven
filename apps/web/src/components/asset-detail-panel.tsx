@@ -99,7 +99,7 @@ function TelRow({ label, value, color, mono }: { label: string; value: string; c
     <div className="flex items-baseline justify-between">
       <span className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em]">{label}</span>
       <span
-        className={`text-[10px] font-mono truncate max-w-[140px] ${mono ? "text-[var(--om-text-secondary)]" : "text-[var(--om-text-primary)]"}`}
+        className={`text-[10px] truncate max-w-[140px] ${mono ? "text-[var(--om-text-secondary)]" : "text-[var(--om-text-primary)]"}`}
         style={color ? { color } : undefined}
       >
         {value}

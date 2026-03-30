@@ -75,7 +75,7 @@ export function SimulationControls({
       {/* Tick counter */}
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em]">Tick</span>
-        <span className="text-[11px] text-[var(--om-text-primary)] font-mono font-bold tabular-nums">
+        <span className="text-[11px] text-[var(--om-text-primary)] font-bold tabular-nums">
           {tick.toLocaleString().padStart(6, "\u2007")}
         </span>
       </div>
@@ -85,7 +85,7 @@ export function SimulationControls({
       {/* Asset count */}
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em]">Assets</span>
-        <span className="text-[10px] text-[var(--om-text-primary)] font-mono">{assetCount}</span>
+        <span className="text-[10px] text-[var(--om-text-primary)]">{assetCount}</span>
       </div>
 
       {/* Pending events */}
@@ -94,7 +94,7 @@ export function SimulationControls({
           <div className="w-px h-4 bg-[var(--om-border-strong)]" />
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em]">Queued</span>
-            <span className="text-[10px] text-[var(--om-orange-light)] font-mono">{pendingEvents}</span>
+            <span className="text-[10px] text-[var(--om-orange-light)]">{pendingEvents}</span>
           </div>
         </>
       )}

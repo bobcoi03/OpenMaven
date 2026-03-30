@@ -8,6 +8,7 @@ import uuid
 from typing import Any
 
 from simulation.assets import AssetStatus, Position, SimAsset
+from simulation.detection import sensor_range_for
 from simulation.faction import Doctrine, Faction, Leader, Resources
 from simulation.manager import SimulationManager
 from simulation.rules import DependencyLink
@@ -212,6 +213,7 @@ def _add_blue_assets(mgr: SimulationManager) -> None:
             speed_kmh=spd,
             max_speed_kmh=max(spd, _MAX_SPEEDS.get(atype, spd)),
             sensor_type=sensor,
+            sensor_range_km=sensor_range_for(sensor),
             weapons=weapons,
         ))
 
@@ -280,6 +282,7 @@ def _add_red_assets(mgr: SimulationManager) -> None:
             speed_kmh=spd,
             max_speed_kmh=max(spd, _MAX_SPEEDS.get(atype, spd)),
             sensor_type=sensor,
+            sensor_range_km=sensor_range_for(sensor),
             weapons=weapons,
         ))
 
