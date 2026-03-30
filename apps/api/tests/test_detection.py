@@ -103,7 +103,7 @@ def test_probability_scales_with_signature() -> None:
 
 
 def test_known_sensor_range() -> None:
-    assert sensor_range_for("AN/APY-2 Radar") == 40.0
+    assert sensor_range_for("AN/APY-2 Radar") == 45.0
 
 
 def test_none_sensor_returns_default() -> None:

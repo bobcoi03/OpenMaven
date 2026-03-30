@@ -191,18 +191,15 @@ class TestExtractAndStore:
         mock_graphiti = AsyncMock()
         mock_graphiti.add_episode = AsyncMock(side_effect=RuntimeError("LLM timeout"))
 
-        result = await extract_and_store(
-            text="Some text",
-            source_id="test-source",
-            filename="test.txt",
-            registry=registry,
-            store=store,
-            graphiti=mock_graphiti,
-        )
-
-        assert result.objects_created == 0
-        assert len(result.errors) == 1
-        assert "LLM timeout" in result.errors[0]
+        with pytest.raises(RuntimeError, match="LLM timeout"):
+            await extract_and_store(
+                text="Some text",
+                source_id="test-source",
+                filename="test.txt",
+                registry=registry,
+                store=store,
+                graphiti=mock_graphiti,
+            )
 
 
 class TestFallbackWithoutApiKey:

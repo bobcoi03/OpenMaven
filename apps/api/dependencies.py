@@ -2,8 +2,11 @@
 
 import logging
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
+
+SEED_PATH: Path = Path(__file__).parent / "data" / "seed" / "yc-seed.json"
 
 load_dotenv(override=True)
 

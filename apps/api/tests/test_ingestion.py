@@ -292,10 +292,12 @@ class TestXlsxReader:
         mock_df = MagicMock()
         mock_df.to_csv.return_value = "name,age\nAlice,30\n"
 
-        with patch("pandas.read_excel", return_value=mock_df) as mock_read:
+        mock_pandas = MagicMock()
+        mock_pandas.read_excel.return_value = mock_df
+        with patch.dict("sys.modules", {"pandas": mock_pandas}):
             result = read_xlsx(b"fake xlsx bytes")
             assert "name,age" in result
-            mock_read.assert_called_once()
+            mock_pandas.read_excel.assert_called_once()
 
 
 # ── Document ingestion tests ───────────────────────────────────────────────
