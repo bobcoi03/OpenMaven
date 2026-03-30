@@ -413,12 +413,22 @@ Do NOT use 'blufor' or 'opfor' as faction IDs. Call list_factions if uncertain.
 When the operator says "BLUFOR", use faction_id 'blue'.
 When the operator says "OPFOR", "enemy", or "hostile", use faction_id 'red'.
 
+Asset mobility:
+- Some assets are STATIONARY (speed_kmh=0, can_move=false): HIMARS, howitzers, SAM sites.
+  Stationary assets CANNOT use launch_strike_mission (which requires flying to the target).
+  Use execute_strike for stationary assets (instant strike, no travel).
+- Mobile assets (speed_kmh>0, can_move=true): aircraft, vehicles, ships.
+  These can use launch_strike_mission to fly to the target.
+- Always check can_move before choosing strike method.
+- Only use weapons that appear in the shooter's weapons list. Never guess weapon IDs.
+
 Strike workflow (single target):
 1. When the operator requests a strike, call plan_strike(attacker_id, target_id).
 2. Present weapon options and your recommendation briefly.
-3. Use launch_strike_mission (realistic travel) or execute_strike (instant).
+3. If attacker can_move=true: use launch_strike_mission (realistic travel).
+   If attacker can_move=false: use execute_strike (instant, for stationary assets).
 4. If the operator says "kill" or "destroy" a target, treat that as a strike request.
-5. If only a target is specified, pick the nearest friendly asset with weapons as attacker.
+5. If only a target is specified, pick the nearest friendly MOBILE asset with weapons as attacker.
 
 Multi-target strike workflow:
 1. When the operator says "strike all targets", "kill everything", "coordinate strikes",
@@ -545,6 +555,8 @@ def handle_force_disposition(faction_id: str) -> str:
             "health": asset.health,
             "lat": round(asset.position.latitude, 2),
             "lon": round(asset.position.longitude, 2),
+            "speed_kmh": asset.max_speed_kmh or asset.speed_kmh,
+            "can_move": (asset.max_speed_kmh or asset.speed_kmh) > 0,
             "weapons": asset.weapons,
         }
         by_type.setdefault(asset.asset_type, []).append(entry)
@@ -580,6 +592,8 @@ def handle_find_assets(query: str, faction_id: str | None = None, status: str | 
                 "health": asset.health,
                 "lat": round(asset.position.latitude, 2),
                 "lon": round(asset.position.longitude, 2),
+                "speed_kmh": asset.max_speed_kmh or asset.speed_kmh,
+                "can_move": (asset.max_speed_kmh or asset.speed_kmh) > 0,
                 "weapons": asset.weapons,
             })
 
@@ -605,6 +619,8 @@ def handle_assets_near(lat: float, lon: float, radius_km: float = 50) -> str:
                 "distance_km": round(dist, 1),
                 "lat": round(asset.position.latitude, 4),
                 "lon": round(asset.position.longitude, 4),
+                "speed_kmh": asset.max_speed_kmh or asset.speed_kmh,
+                "can_move": (asset.max_speed_kmh or asset.speed_kmh) > 0,
                 "weapons": asset.weapons,
             }
             results.setdefault(asset.faction_id, []).append(entry)
@@ -688,6 +704,7 @@ def handle_plan_strike(attacker_id: str, target_id: str) -> str:
             best_score = effectiveness
             best_weapon = weapon_id
 
+    attacker_speed = attacker.max_speed_kmh or attacker.speed_kmh
     return json.dumps({
         "attacker": {
             "asset_id": attacker.asset_id,
@@ -695,6 +712,8 @@ def handle_plan_strike(attacker_id: str, target_id: str) -> str:
             "asset_type": attacker.asset_type,
             "lat": round(attacker.position.latitude, 2),
             "lon": round(attacker.position.longitude, 2),
+            "speed_kmh": attacker_speed,
+            "can_move": attacker_speed > 0,
         },
         "target": {
             "asset_id": target.asset_id,
@@ -737,6 +756,20 @@ def handle_launch_strike_mission(shooter_id: str, weapon_id: str, target_id: str
     shooter = _resolve_asset(sim, shooter_id)
     if shooter is None:
         return json.dumps({"error": f"Shooter '{shooter_id}' not found."})
+
+    shooter_speed = shooter.max_speed_kmh or shooter.speed_kmh
+    if shooter_speed <= 0:
+        return json.dumps({
+            "error": f"{shooter.callsign} cannot move (stationary asset, speed=0). "
+            f"Use execute_strike for instant strike or pick a mobile shooter.",
+        })
+
+    if weapon_id not in shooter.weapons:
+        return json.dumps({
+            "error": f"{shooter.callsign} does not have weapon '{weapon_id}'. "
+            f"Available weapons: {shooter.weapons}",
+        })
+
     target = _resolve_asset(sim, target_id)
     if target is None:
         return json.dumps({"error": f"Target '{target_id}' not found."})
@@ -840,6 +873,7 @@ def handle_plan_multi_strike(
             and asset.is_alive()
             and asset.weapons
             and asset.asset_id not in on_mission_ids
+            and (asset.max_speed_kmh or asset.speed_kmh) > 0
         ):
             shooters.append(asset)
 
