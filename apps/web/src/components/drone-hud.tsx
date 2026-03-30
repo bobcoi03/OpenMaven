@@ -13,6 +13,8 @@ interface DroneHudProps {
   drone: SimAsset;
   target: DetectionEntry | null;
   connected: boolean;
+  onStrike?: () => void;
+  strikeState?: "ready" | "in_flight" | "no_shooter";
 }
 
 function HudRow({ label, value }: { label: string; value: string }) {
@@ -26,7 +28,7 @@ function HudRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function DroneHud({ drone, target, connected }: DroneHudProps) {
+export function DroneHud({ drone, target, connected, onStrike, strikeState }: DroneHudProps) {
   const { position, speed_kmh, callsign, asset_type, health } = drone;
   const healthPct = Math.max(0, Math.min(100, health));
   const healthColor =
@@ -111,15 +113,33 @@ export function DroneHud({ drone, target, connected }: DroneHudProps) {
               label="Pos"
               value={`${target.lat.toFixed(4)}  ${target.lon.toFixed(4)}`}
             />
-            <div className="mt-1 px-2 py-1 rounded-sm text-[9px] font-semibold text-center"
-              style={{
-                background: "rgba(205,66,70,0.1)",
-                border: "1px solid rgba(205,66,70,0.3)",
-                color: "var(--om-red-light)",
-              }}
-            >
-              TARGET LOCKED
-            </div>
+            {/* Strike button */}
+            {onStrike && strikeState !== "in_flight" && (
+              <button
+                onClick={onStrike}
+                disabled={strikeState === "no_shooter"}
+                className="mt-2 w-full px-2 py-1.5 rounded-sm text-[10px] font-bold tracking-widest cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: strikeState === "no_shooter" ? "rgba(205,66,70,0.05)" : "rgba(205,66,70,0.18)",
+                  border: "1px solid rgba(205,66,70,0.5)",
+                  color: "var(--om-red-light)",
+                }}
+              >
+                {strikeState === "no_shooter" ? "NO SHOOTER" : "⚡ STRIKE"}
+              </button>
+            )}
+            {strikeState === "in_flight" && (
+              <div
+                className="mt-2 w-full px-2 py-1.5 rounded-sm text-[10px] font-bold tracking-widest text-center"
+                style={{
+                  background: "rgba(249,115,22,0.1)",
+                  border: "1px solid rgba(249,115,22,0.4)",
+                  color: "var(--om-orange, #f97316)",
+                }}
+              >
+                MISSILE EN ROUTE
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-[10px] text-[var(--om-text-muted)]">No target detected</div>

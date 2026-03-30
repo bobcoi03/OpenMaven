@@ -14,6 +14,7 @@ import { ArrowLeft } from "lucide-react";
 import { useSimulation } from "@/lib/use-simulation";
 import { FlirFeed } from "@/components/flir-feed";
 import { DroneHud } from "@/components/drone-hud";
+import { findBestPairing } from "@/lib/strike-pairing";
 
 interface PageProps {
   params: Promise<{ assetId: string }>;
@@ -48,6 +49,26 @@ export default function CameraPage({ params }: PageProps) {
   // Find the first active detection that this drone is sensing
   const trackedDetection =
     Object.values(sim.detections).find((d) => d.sensor_asset_id === assetId) ?? null;
+
+  // Strike pairing for the tracked target
+  const targetAsset = trackedDetection ? sim.assets[trackedDetection.target_id] : null;
+  const bestPairing = targetAsset && !targetDestroyed ? findBestPairing(targetAsset, sim.assets) : null;
+  const activeMissionForTarget = trackedDetection
+    ? Object.values(sim.activeMissions).find((m) => m.target_id === trackedDetection.target_id)
+    : null;
+
+  const strikeState: "ready" | "in_flight" | "no_shooter" | undefined = trackedDetection
+    ? activeMissionForTarget
+      ? "in_flight"
+      : bestPairing
+        ? "ready"
+        : "no_shooter"
+    : undefined;
+
+  function handleStrike() {
+    if (!bestPairing) return;
+    sim.strikeMission(bestPairing.shooter.asset_id, bestPairing.weaponId, bestPairing.target.asset_id);
+  }
 
   // Watch for target asset being destroyed → trigger explosion on FLIR feed
   useEffect(() => {
@@ -157,6 +178,8 @@ export default function CameraPage({ params }: PageProps) {
             drone={drone}
             target={trackedDetection}
             connected={sim.connected}
+            onStrike={trackedDetection && !targetDestroyed ? handleStrike : undefined}
+            strikeState={strikeState}
           />
         </div>
       </div>
