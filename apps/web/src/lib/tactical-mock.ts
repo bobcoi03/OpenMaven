@@ -44,6 +44,13 @@ export interface TacticalAsset {
   efficiency_pct?: number;
   output_mw?: number;
   structural_pct?: number;
+  // Simulation status (active, damaged, destroyed, on_mission, etc.)
+  sim_status?: string;
+  // Fog of war
+  detection_confidence?: number;
+  detected_by?: string;
+  is_ghost?: boolean;
+  ghost_age_ticks?: number;
 }
 
 // ── Targeting Board Alert ─────────────────────────────────────────────────────

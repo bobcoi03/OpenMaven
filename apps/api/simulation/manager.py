@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from simulation.assets import AssetStatus, MovementOrder, Position, SimAsset
 from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
+from simulation.detection import SensorReading, compute_detections
 from simulation.rules import (
     DependencyLink,
     bearing_degrees,
@@ -39,6 +40,37 @@ class SimSpeed(float, Enum):
 # ── State diff (broadcast to clients each tick) ─────────────────────────────
 
 
+class DetectionEntry(BaseModel):
+    """A detected enemy visible to the player this tick."""
+
+    target_id: str
+    confidence: float
+    sensor_asset_id: str
+    lat: float
+    lon: float
+
+
+class GhostEntry(BaseModel):
+    """A previously detected enemy no longer in sensor range."""
+
+    target_id: str
+    last_lat: float
+    last_lon: float
+    last_seen_tick: int
+    confidence_at_loss: float
+
+
+class MissionUpdate(BaseModel):
+    """Progress or completion of a strike mission, sent to clients."""
+
+    mission_id: str
+    shooter_id: str
+    weapon_id: str
+    target_id: str
+    status: str  # en_route | complete | aborted
+    result: dict[str, Any] | None = None
+
+
 class StateDiff(BaseModel):
     """Changes from a single tick, sent to clients via WebSocket."""
 
@@ -46,9 +78,25 @@ class StateDiff(BaseModel):
     asset_updates: list[dict[str, Any]]
     events_fired: list[dict[str, Any]]
     alerts: list[str]
+    detections: list[DetectionEntry] = []
+    ghosts: list[GhostEntry] = []
+    mission_updates: list[MissionUpdate] = []
 
 
 # ── Manager ──────────────────────────────────────────────────────────────────
+
+
+class StrikeMission(BaseModel):
+    """A strike mission: shooter flies to target, strikes on arrival."""
+
+    mission_id: str
+    shooter_id: str
+    weapon_id: str
+    target_id: str
+    status: str = "en_route"  # en_route | complete | aborted
+    arrive_tick: int
+    created_tick: int
+    result: dict[str, Any] | None = None
 
 
 class SimulationManager:
@@ -58,6 +106,9 @@ class SimulationManager:
     the tick loop as an asyncio background task. Commands from
     WebSocket clients mutate state here.
     """
+
+    # Ghosts expire after this many ticks without re-detection
+    GHOST_EXPIRY_TICKS: int = 60
 
     def __init__(self, tick_duration_s: float = 10.0) -> None:
         self.tick: int = 0
@@ -70,6 +121,15 @@ class SimulationManager:
         self.dependencies: list[DependencyLink] = []
         self.event_queue: EventQueue = EventQueue()
         self.event_log: list[SimEvent] = []
+
+        # Fog of war state
+        self._detected: dict[str, SensorReading] = {}  # currently detected enemies
+        self._ghosts: dict[str, GhostEntry] = {}  # last-known positions
+
+        # Strike missions
+        self.active_missions: dict[str, StrikeMission] = {}
+        self.mission_log: list[StrikeMission] = []
+        self._missions_resolved_this_tick: list[StrikeMission] = []
 
         self._task: asyncio.Task[None] | None = None
         self._broadcast_fn: Any = None  # set externally by WebSocket manager
@@ -119,7 +179,81 @@ class SimulationManager:
             "assets": {k: v.model_dump() for k, v in self.assets.items()},
             "factions": {k: v.model_dump() for k, v in self.factions.items()},
             "pending_events": self.event_queue.pending_count,
+            "detections": [
+                DetectionEntry(
+                    target_id=r.target_id,
+                    confidence=r.confidence,
+                    sensor_asset_id=r.sensor_asset_id,
+                    lat=r.lat,
+                    lon=r.lon,
+                ).model_dump()
+                for r in self._detected.values()
+            ],
+            "ghosts": [g.model_dump() for g in self._ghosts.values()],
+            "active_missions": {
+                k: v.model_dump() for k, v in self.active_missions.items()
+            },
         }
+
+    # ── Fog of war ─────────────────────────────────────────────────────────
+
+    def _tick_detections(self) -> tuple[list[DetectionEntry], list[GhostEntry]]:
+        """Run sensor detection for the blue faction against all hostiles."""
+        blue_sensors = {
+            aid: a for aid, a in self.assets.items()
+            if a.faction_id == "blue" and a.is_alive()
+        }
+        hostile_targets = {
+            aid: a for aid, a in self.assets.items()
+            if a.faction_id not in ("blue", "civilian") and a.is_alive()
+        }
+
+        readings = compute_detections(blue_sensors, hostile_targets)
+        detected_ids = {r.target_id for r in readings}
+
+        # Update detection state
+        new_detected: dict[str, SensorReading] = {}
+        for r in readings:
+            new_detected[r.target_id] = r
+
+        # Transition: previously detected but now lost → ghost
+        for tid, old_reading in self._detected.items():
+            if tid not in detected_ids:
+                self._ghosts[tid] = GhostEntry(
+                    target_id=tid,
+                    last_lat=old_reading.lat,
+                    last_lon=old_reading.lon,
+                    last_seen_tick=self.tick - 1,
+                    confidence_at_loss=old_reading.confidence,
+                )
+
+        # Remove ghosts that got re-detected
+        for tid in detected_ids:
+            self._ghosts.pop(tid, None)
+
+        # Expire old ghosts
+        expired = [
+            tid for tid, g in self._ghosts.items()
+            if self.tick - g.last_seen_tick > self.GHOST_EXPIRY_TICKS
+        ]
+        for tid in expired:
+            del self._ghosts[tid]
+
+        self._detected = new_detected
+
+        detection_entries = [
+            DetectionEntry(
+                target_id=r.target_id,
+                confidence=r.confidence,
+                sensor_asset_id=r.sensor_asset_id,
+                lat=r.lat,
+                lon=r.lon,
+            )
+            for r in readings
+        ]
+        ghost_entries = list(self._ghosts.values())
+
+        return detection_entries, ghost_entries
 
     # ── Commands ──────────────────────────────────────────────────────────
 
@@ -201,6 +335,165 @@ class SimulationManager:
             "heading": round(heading, 1),
         }
 
+    def command_strike_mission(
+        self,
+        shooter_id: str,
+        weapon_id: str,
+        target_id: str,
+    ) -> dict[str, Any]:
+        """Order a shooter to fly to a target and strike on arrival."""
+        shooter = self.assets.get(shooter_id)
+        if shooter is None:
+            return {"error": "Shooter not found"}
+        if not shooter.is_alive():
+            return {"error": "Shooter is destroyed"}
+
+        target = self.assets.get(target_id)
+        if target is None:
+            return {"error": "Target not found"}
+        if not target.is_alive():
+            return {"error": "Target already destroyed"}
+
+        if weapon_id not in {w for w in shooter.weapons}:
+            return {"error": f"Shooter does not have weapon: {weapon_id}"}
+
+        # Move shooter to target position
+        move_result = self.command_move(
+            shooter_id,
+            target.position.latitude,
+            target.position.longitude,
+            dest_alt=shooter.position.altitude_m,
+        )
+        if "error" in move_result:
+            return move_result
+
+        # Set mission status and remove from patrol
+        shooter.status = AssetStatus.ON_MISSION
+        self._patrol_assets.discard(shooter_id)
+
+        arrive_tick = self.tick + move_result["eta_ticks"]
+        mission_id = f"msn_{uuid.uuid4().hex[:8]}"
+
+        # Schedule strike event at arrival
+        self.event_queue.create_and_schedule(
+            event_type=EventType.STRIKE_MISSION,
+            description=f"Strike mission: {shooter.callsign} → {target.callsign}",
+            scheduled_tick=arrive_tick,
+            faction_id="blue",
+            mission_id=mission_id,
+        )
+
+        mission = StrikeMission(
+            mission_id=mission_id,
+            shooter_id=shooter_id,
+            weapon_id=weapon_id,
+            target_id=target_id,
+            arrive_tick=arrive_tick,
+            created_tick=self.tick,
+        )
+        self.active_missions[mission_id] = mission
+
+        return {
+            "mission_id": mission_id,
+            "distance_km": move_result["distance_km"],
+            "eta_ticks": move_result["eta_ticks"],
+            "heading": move_result["heading"],
+        }
+
+    def command_abort_mission(self, mission_id: str) -> dict[str, Any]:
+        """Abort an active strike mission. Shooter returns to active status."""
+        mission = self.active_missions.get(mission_id)
+        if mission is None:
+            return {"error": "Mission not found or already resolved"}
+
+        # Cancel the scheduled strike event
+        self.event_queue.cancel_by_mission_id(mission_id)
+
+        # Reset shooter status and resume patrol
+        shooter = self.assets.get(mission.shooter_id)
+        if shooter and shooter.is_alive():
+            shooter.status = AssetStatus.ACTIVE
+            shooter.movement_order = None
+            self.assign_patrol(shooter.asset_id)
+
+        mission.status = "aborted"
+        mission.result = {"outcome": "aborted", "description": "Mission aborted by operator."}
+        self.mission_log.append(mission)
+        del self.active_missions[mission_id]
+
+        return {"mission_id": mission_id, "status": "aborted"}
+
+    def _resolve_strike_mission(self, mission_id: str) -> None:
+        """Resolve a strike mission when the shooter arrives at the target."""
+        mission = self.active_missions.get(mission_id)
+        if mission is None:
+            return
+
+        def _finish_mission() -> None:
+            """Move mission to log and mark as resolved this tick."""
+            self.mission_log.append(mission)
+            self._missions_resolved_this_tick.append(mission)
+            del self.active_missions[mission_id]
+
+        shooter = self.assets.get(mission.shooter_id)
+        target = self.assets.get(mission.target_id)
+
+        # Abort if shooter destroyed en route
+        if shooter is None or not shooter.is_alive():
+            mission.status = "aborted"
+            mission.result = {"outcome": "aborted", "description": "Shooter destroyed en route."}
+            _finish_mission()
+            return
+
+        # Abort if target already destroyed
+        if target is None or not target.is_alive():
+            mission.status = "aborted"
+            mission.result = {"outcome": "aborted", "description": "Target already destroyed."}
+            shooter.status = AssetStatus.ACTIVE
+            self.assign_patrol(shooter.asset_id)
+            _finish_mission()
+            return
+
+        # Resolve strike
+        result = resolve_strike_by_names(mission.weapon_id, target.asset_type)
+        if result is None:
+            mission.status = "aborted"
+            mission.result = {"outcome": "aborted", "description": f"Unknown weapon: {mission.weapon_id}"}
+            shooter.status = AssetStatus.ACTIVE
+            self.assign_patrol(shooter.asset_id)
+            _finish_mission()
+            return
+
+        target.apply_damage(result.damage_percent)
+        self._update_faction_capability(target.faction_id)
+
+        if result.destroyed:
+            self._handle_infrastructure_cascade(mission.target_id)
+
+        mission.status = "complete"
+        mission.result = {
+            "outcome": result.outcome.value,
+            "hit": result.hit,
+            "destroyed": result.destroyed,
+            "damage_percent": result.damage_percent,
+            "description": result.description,
+            "target_status": target.status.value,
+            "target_health": target.health,
+            "target_asset_type": target.asset_type,
+            "target_lat": target.position.latitude,
+            "target_lon": target.position.longitude,
+            "shooter_callsign": shooter.callsign,
+            "shooter_asset_type": shooter.asset_type,
+            "distance_km": round(haversine_km(
+                shooter.position.latitude, shooter.position.longitude,
+                target.position.latitude, target.position.longitude,
+            ), 1),
+        }
+
+        shooter.status = AssetStatus.ACTIVE
+        self.assign_patrol(shooter.asset_id)
+        _finish_mission()
+
     # ── Auto-patrol ─────────────────────────────────────────────────────
 
     # Static asset types that should never patrol
@@ -278,6 +571,7 @@ class SimulationManager:
     def _advance_tick(self) -> StateDiff:
         """Process one simulation tick."""
         self.tick += 1
+        self._missions_resolved_this_tick = []
         asset_updates: list[dict[str, Any]] = []
         alerts: list[str] = []
 
@@ -296,15 +590,43 @@ class SimulationManager:
                 events_fired.append(event.model_dump())
                 self.event_log.append(event)
 
+        # 3. Fog of war — run detection
+        detection_entries, ghost_entries = self._tick_detections()
+
+        # 4. Collect mission updates (resolved this tick + active en-route)
+        mission_updates: list[MissionUpdate] = []
+        for m in self._missions_resolved_this_tick:
+            mission_updates.append(MissionUpdate(
+                mission_id=m.mission_id,
+                shooter_id=m.shooter_id,
+                weapon_id=m.weapon_id,
+                target_id=m.target_id,
+                status=m.status,
+                result=m.result,
+            ))
+        for m in self.active_missions.values():
+            mission_updates.append(MissionUpdate(
+                mission_id=m.mission_id,
+                shooter_id=m.shooter_id,
+                weapon_id=m.weapon_id,
+                target_id=m.target_id,
+                status=m.status,
+            ))
+
         return StateDiff(
             tick=self.tick,
             asset_updates=asset_updates,
             events_fired=events_fired,
             alerts=alerts,
+            detections=detection_entries,
+            ghosts=ghost_entries,
+            mission_updates=mission_updates,
         )
 
     def _tick_movement(self, asset: SimAsset) -> dict[str, Any] | None:
         """Update position for a moving asset. Returns update dict or None."""
+        if not asset.is_alive():
+            return None
         if asset.movement_order is None:
             return None
 
@@ -316,11 +638,13 @@ class SimulationManager:
             asset.position.longitude = order.destination.longitude
             asset.position.altitude_m = order.destination.altitude_m
             asset.movement_order = None
-            asset.status = AssetStatus.ACTIVE
 
-            # Auto-reassign patrol waypoint
-            if asset.asset_id in self._patrol_assets:
-                self.assign_patrol(asset.asset_id)
+            # On-mission assets wait for the strike event to resolve
+            if asset.status != AssetStatus.ON_MISSION:
+                asset.status = AssetStatus.ACTIVE
+                # Auto-reassign patrol waypoint
+                if asset.asset_id in self._patrol_assets:
+                    self.assign_patrol(asset.asset_id)
 
             return {
                 "asset_id": asset.asset_id,
@@ -352,6 +676,11 @@ class SimulationManager:
         """Roll probability and execute an event. Returns True if it fired."""
         if event.probability < 1.0 and random.random() > event.probability:
             return False
+
+        # Strike mission events are resolved via the mission system
+        if event.event_type == EventType.STRIKE_MISSION and event.mission_id:
+            self._resolve_strike_mission(event.mission_id)
+            return True
 
         for mutation in event.mutations:
             self._apply_mutation(mutation)

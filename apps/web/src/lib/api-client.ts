@@ -172,10 +172,23 @@ export async function queryKnowledgeGraph(question: string): Promise<QueryResult
   return response.json();
 }
 
+export interface StrikePlanLine {
+  from: [number, number];
+  to: [number, number];
+  shooter_id: string;
+  target_id: string;
+  shooter_callsign: string;
+  target_callsign: string;
+  weapon_id: string;
+  kill_prob_pct: number;
+}
+
 export type QueryStreamEvent =
   | { type: "status"; message: string; step?: number }
   | { type: "tool_call"; name: string; args: Record<string, unknown>; step: number }
   | { type: "tool_result"; name: string; ok: boolean; preview: string; step: number }
+  | { type: "text_delta"; content: string }
+  | { type: "strike_plan"; lines: StrikePlanLine[]; total_targets: number; targets_engaged: number }
   | { type: "final"; answer: string; sources: Array<{ rid: string; name: string; type: string }> }
   | { type: "error"; message: string };
 
@@ -205,7 +218,10 @@ async function _streamQuery(
 ): Promise<void> {
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+    },
     body: JSON.stringify({ question, messages }),
   });
   if (!response.ok || !response.body) {

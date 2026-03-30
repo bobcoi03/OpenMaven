@@ -10,6 +10,7 @@ class EventType(str, Enum):
     """Categories of simulation events."""
 
     STRIKE = "strike"
+    STRIKE_MISSION = "strike_mission"
     MOVEMENT_COMPLETE = "movement_complete"
     REINFORCEMENT_ARRIVAL = "reinforcement_arrival"
     LEADERSHIP_CHANGE = "leadership_change"
@@ -38,6 +39,7 @@ class SimEvent(BaseModel):
     scheduled_tick: int  # when this event fires
     probability: float = 1.0  # 0.0–1.0, rolled when the event fires
     mutations: list[Mutation] = Field(default_factory=list)
+    mission_id: str | None = None  # links to a StrikeMission
     source_event_id: str | None = None  # the event that caused this one
 
 
@@ -66,6 +68,7 @@ class EventQueue:
         faction_id: str | None = None,
         probability: float = 1.0,
         source_event_id: str | None = None,
+        mission_id: str | None = None,
     ) -> SimEvent:
         """Create a new event and add it to the queue."""
         event = SimEvent(
@@ -76,6 +79,7 @@ class EventQueue:
             scheduled_tick=scheduled_tick,
             probability=probability,
             mutations=mutations or [],
+            mission_id=mission_id,
             source_event_id=source_event_id,
         )
         self._next_id += 1
@@ -101,6 +105,12 @@ class EventQueue:
         if not self._events:
             return None
         return self._events[0].scheduled_tick
+
+    def cancel_by_mission_id(self, mission_id: str) -> bool:
+        """Remove all pending events for a given mission_id. Returns True if any removed."""
+        before = len(self._events)
+        self._events = [e for e in self._events if e.mission_id != mission_id]
+        return len(self._events) < before
 
     def clear(self) -> None:
         """Remove all pending events."""
