@@ -115,7 +115,27 @@ export interface StateDiff {
   ghosts: GhostEntry[];
   mission_updates: MissionUpdate[];
 }
+export interface DetectionRecord {
+  detection_id: string;
+  timestamp: string;
+  asset_id: string;
+  asset_type: string;
+  confidence: number;
+  grid_ref: string;
+  lat: number;
+  lon: number;
+  source_label: string;
+  classification: string;
+}
 
+export interface DetectionTarget {
+  target_id: string;
+  stage: "DELIBERATE" | "DYNAMIC" | "PENDING_PAIRING" | "PAIRED" | "IN_EXECUTION" | "PENDING_BDA" | "COMPLETE";
+  created_at: string;
+  updated_at: string;
+  history?: Array<[string, string]>;
+  detection: DetectionRecord;
+}
 // ── Hook ────────────────────────────────────────────────────────────────────
 
 interface UseSimulationOptions {
@@ -132,6 +152,7 @@ interface UseSimulationReturn {
   assets: Record<string, SimAsset>;
   factions: Record<string, SimFaction>;
   pendingEvents: number;
+  boardState: DetectionTarget[];
   /** Currently detected enemy assets */
   detections: Record<string, DetectionEntry>;
   /** Previously detected enemies now out of sensor range */
@@ -166,6 +187,7 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
   const [assets, setAssets] = useState<Record<string, SimAsset>>({});
   const [factions, setFactions] = useState<Record<string, SimFaction>>({});
   const [pendingEvents, setPendingEvents] = useState(0);
+  const [boardState, setBoardState] = useState<DetectionTarget[]>([]);
   const [detections, setDetections] = useState<Record<string, DetectionEntry>>({});
   const [ghosts, setGhosts] = useState<Record<string, GhostEntry>>({});
   const [activeMissions, setActiveMissions] = useState<Record<string, MissionUpdate>>({});
@@ -414,6 +436,13 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
       setSpeedState(msg.speed);
       return;
     }
+
+    if (msg.type === "detections") {
+      const data = msg.data ?? msg;
+      const boardState = Array.isArray(data.board_state) ? data.board_state as DetectionTarget[] : [];
+      setBoardState(boardState);
+      return;
+    }
   }, []);
 
   // ── Connection lifecycle ────────────────────────────────────────────
@@ -442,6 +471,7 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
     assets,
     factions,
     pendingEvents,
+    boardState,
     detections,
     ghosts,
     activeMissions,

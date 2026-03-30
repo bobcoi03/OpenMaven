@@ -111,6 +111,24 @@ CATEGORY_MAP: dict[str, str] = {
     # Weapons/equipment (not targetable in the same way)
     "M4A1 Carbine": "supply_depot",
     "NATO Ammo Crate": "supply_depot",
+    # ── Russian expanded OPFOR ───────────────────────────────────────────
+    "T-90M Proryv MBT": "armored_vehicle",
+    "T-14 Armata MBT": "armored_vehicle",
+    "BMP-3 IFV": "armored_vehicle",
+    "Su-35S Flanker-E": "aircraft_airborne",
+    "Su-34 Fullback": "aircraft_airborne",
+    "Su-57 Felon": "aircraft_airborne",
+    "Ka-52 Alligator": "aircraft_airborne",
+    "Mi-28NM Night Hunter": "aircraft_airborne",
+    "Pantsir-S1": "sam_site",
+    "Iskander-M": "soft_vehicle",   # TEL is wheeled; hardness via soft_vehicle
+    # ── ISIS ─────────────────────────────────────────────────────────────
+    "Toyota Hilux Technical (HMG)": "soft_vehicle",
+    "Captured T-55": "armored_vehicle",
+    "ZU-23-2 AA Gun": "soft_vehicle",   # gun on towed/truck mount
+    "RPG-7 Team": "infantry_squad",
+    # ── Iran ─────────────────────────────────────────────────────────────
+    "Shahed-136 Loitering Munition": "aircraft_airborne",
 }
 
 

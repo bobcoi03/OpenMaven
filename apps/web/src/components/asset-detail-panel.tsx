@@ -37,6 +37,44 @@ const ASSET_EMBED_MAP: Record<string, string> = {
   "Civilian Bus": "https://sketchfab.com/models/02c9f34db5714ac09a20445656f13d6a/embed",
   "Civilian Sedan": "https://sketchfab.com/models/bab77902c638427bb85e68b6762a481f/embed",
   "Infantry Squad": "https://sketchfab.com/models/22ddacc2fa6b4f67b975169c548dbd70/embed",
+
+  // ── Russia ───────────────────────────────────────────────────────────────
+  // T-90A (best free proxy for T-90M) — Lasha-Georgy Bajadze, highly detailed
+  "T-90M Proryv MBT": "https://sketchfab.com/models/c9a5bbaf23ad47ad90586395629a2d1c/embed",
+  // T-14 Armata — Austrian 3D Art, accurate geometry
+  "T-14 Armata MBT": "https://sketchfab.com/models/b2aadbb1fadb430eb9dacef864cea36d/embed",
+  // BMP-3 — 42manako, fully detailed crew compartment
+  "BMP-3 IFV": "https://sketchfab.com/models/7bcaacdbdc4a409f9fa69e6a8c0e76c3/embed",
+  // BTR-82A — 42manako, 30mm cannon variant
+  "BTR-82A APC": "https://sketchfab.com/models/5c10df6da4154042a481fe89fd688fdb/embed",
+  // Su-35S Flanker-E — andertan, free accurate model
+  "Su-35S Flanker-E": "https://sketchfab.com/models/c98cf9b3b3e04017a04732798a31888a/embed",
+  // Su-34 Fullback — 42manako, "24 Red" livery
+  "Su-34 Fullback": "https://sketchfab.com/models/66e6f5299cf947bd9509316397c79ee2/embed",
+  // Su-57 Felon — andertan, free
+  "Su-57 Felon": "https://sketchfab.com/models/09d546b4355c4fa6882ca46e05069bee/embed",
+  // Ka-52 Alligator — 42manako, free
+  "Ka-52 Alligator": "https://sketchfab.com/models/9b31733ceed24be49b2f621487b35ea9/embed",
+  // Mi-28NM Night Hunter — vodiva83, Blender/Substance PBR
+  "Mi-28NM Night Hunter": "https://sketchfab.com/models/9d99af0b263b43fd90588de3e3714094/embed",
+  // Pantsir-S1 — 42manako retexture, low-poly game-ready
+  "Pantsir-S1": "https://sketchfab.com/models/6a32352b302848508774583a58659211/embed",
+  // Iskander-M — 42manako 9K720 TELAR (transporter/erector/launcher)
+  "Iskander-M": "https://sketchfab.com/models/1fff10b191114e638a1a261e70480fb1/embed",
+
+  // ── Iran ─────────────────────────────────────────────────────────────────
+  // Shahed-136 — Chenzoss, 120k tri accurate recreation
+  "Shahed-136 Loitering Munition": "https://sketchfab.com/models/af8ac3d45ade494fb280c99922513ae2/embed",
+
+  // ── ISIS / Non-State ──────────────────────────────────────────────────────
+  // Toyota Hilux Technical — reuses existing armed-pickup model (best proxy)
+  "Toyota Hilux Technical (HMG)": "https://sketchfab.com/models/bc5604e0a7b341909de1077d0b3bc176/embed",
+  // Captured T-55 — SGAstudio T54/55, game-ready medium-poly
+  "Captured T-55": "https://sketchfab.com/models/6bde9f748c3e472e878d333998b506f9/embed",
+  // ZU-23-2 — Rolando Garro Mena, free 6k-tri model
+  "ZU-23-2 AA Gun": "https://sketchfab.com/models/6e9aeca2844e4ceeb7cf1301337d1b94/embed",
+  // RPG-7 — ArtEast, high-res textures 4096px
+  "RPG-7 Team": "https://sketchfab.com/models/23d13d69b7ab4ea1a438c57ca3a234b4/embed",
 };
 
 const SKETCHFAB_PARAMS = "autostart=1&transparent=1&ui_theme=dark&ui_controls=0&ui_infos=0&ui_watermark_link=0&ui_watermark=0&ui_help=0&ui_settings=0&ui_inspector=0&ui_annotations=0&ui_stop=0&ui_vr=0&ui_fullscreen=0&ui_hint=0";
