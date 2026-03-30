@@ -64,7 +64,7 @@ sim_manager, ws_manager = _build_simulation()
 
 # ── LLM client ───────────────────────────────────────────────────────────────
 
-LLM_MODEL: str = os.environ.get("LLM_MODEL", "google/gemini-2.5-pro")
+LLM_MODEL: str = os.environ.get("LLM_MODEL", "moonshotai/kimi-k2.5")
 
 
 def get_llm_client():
