@@ -18,6 +18,7 @@ interface UseMapContextMenuOptions {
   onStartMove: (assetId: string) => void;
   onStartMoveHere: (assetId: string, lng: number, lat: number) => void;
   onStrikeTarget: (targetId: string) => void;
+  onViewCameraFeed: (assetId: string) => void;
 }
 
 interface UseMapContextMenuReturn {
@@ -39,6 +40,7 @@ export function useMapContextMenu({
   onStartMove,
   onStartMoveHere,
   onStrikeTarget,
+  onViewCameraFeed,
 }: UseMapContextMenuOptions): UseMapContextMenuReturn {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
@@ -50,15 +52,16 @@ export function useMapContextMenu({
       x: number;
       y: number;
     }) => {
+      const simAsset = event.asset ? assets[event.asset.asset_id] : undefined;
       setContextMenu({
         type: event.type,
-        asset: event.asset,
+        asset: event.asset ? { ...event.asset, sensor_type: simAsset?.sensor_type ?? null } : undefined,
         lngLat: event.lngLat,
         x: event.x,
         y: event.y,
       });
     },
-    [],
+    [assets],
   );
 
   const handleAction = useCallback(
@@ -81,8 +84,12 @@ export function useMapContextMenu({
       if (action === "move_here" && payload?.assetId && payload?.lat != null && payload?.lon != null) {
         onStartMoveHere(payload.assetId as string, payload.lon as number, payload.lat as number);
       }
+
+      if (action === "view_camera_feed" && payload?.assetId) {
+        onViewCameraFeed(payload.assetId as string);
+      }
     },
-    [assets, onSelectAsset, onStartMove, onStartMoveHere, onStrikeTarget],
+    [assets, onSelectAsset, onStartMove, onStartMoveHere, onStrikeTarget, onViewCameraFeed],
   );
 
   const close = useCallback(() => setContextMenu(null), []);

@@ -8,6 +8,7 @@
  */
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { MapView } from "@/components/map-view";
 import { MAP_STYLES, type MapStyleId } from "@/components/map-view-inner";
 import { SimulationControls } from "@/components/simulation-controls";
@@ -25,6 +26,7 @@ import { findBestPairing, findAllPairings, refreshPairing, type PairingSelection
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function MapPage() {
+  const router = useRouter();
   const { visibleLayers, selectedAsset, setSelectedAsset } = useMapLayers();
   const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
   const [showSensorRanges, setShowSensorRanges] = useState(true);
@@ -269,6 +271,7 @@ export default function MapPage() {
     onStartMove: move.startMove,
     onStartMoveHere: move.startMoveHere,
     onStrikeTarget: handleStrikeTarget,
+    onViewCameraFeed: (assetId: string) => router.push(`/camera/${assetId}`),
   });
 
   // ── Help tooltip click-outside ──────────────────────────────────────────

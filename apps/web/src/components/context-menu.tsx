@@ -11,13 +11,13 @@
 
 import { useEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Crosshair, Move, Zap, Info } from "lucide-react";
+import { Crosshair, Move, Zap, Info, Camera } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface ContextMenuState {
   type: "asset" | "map";
-  asset?: { asset_id: string; callsign: string; weapons: string[]; faction_id: string; is_ghost?: boolean };
+  asset?: { asset_id: string; callsign: string; weapons: string[]; faction_id: string; is_ghost?: boolean; sensor_type?: string | null };
   lngLat?: { lng: number; lat: number };
   x: number;
   y: number;
@@ -129,6 +129,13 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
             label="Details"
             onClick={() => onAction("details", { assetId: asset.asset_id })}
           />
+          {asset.sensor_type && (
+            <MenuItem
+              icon={Camera}
+              label="View Camera Feed"
+              onClick={() => onAction("view_camera_feed", { assetId: asset.asset_id })}
+            />
+          )}
         </div>
       </div>
     );
