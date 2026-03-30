@@ -1333,6 +1333,7 @@ def _run_agent_stream(messages: list[dict], client) -> Generator[dict, None, Non
             tools=TOOLS,
             tool_choice="auto",
             stream=True,
+            extra_body={"reasoning": {"effort": "high"}},
         )
 
         # Accumulate streamed response
@@ -1343,6 +1344,23 @@ def _run_agent_stream(messages: list[dict], client) -> Generator[dict, None, Non
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
+
+            # Stream thinking/reasoning tokens
+            reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+            if not reasoning:
+                # OpenRouter normalized format
+                details = getattr(delta, "reasoning_details", None)
+                if details:
+                    for detail in details:
+                        text = None
+                        if isinstance(detail, dict):
+                            text = detail.get("text") or detail.get("summary")
+                        else:
+                            text = getattr(detail, "text", None) or getattr(detail, "summary", None)
+                        if text:
+                            yield {"type": "thinking_delta", "content": text}
+            elif reasoning:
+                yield {"type": "thinking_delta", "content": reasoning}
 
             # Stream text content token-by-token
             if delta.content:
