@@ -94,10 +94,12 @@ function drawReticle(
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// Screen-space blobs — positions are 0-1 fractions of canvas size.
+// radiusPx is fixed pixel size so they're always visible at any altitude.
 interface TerrainBlob {
-  dlat: number;
-  dlon: number;
-  radiusKm: number;
+  rx: number;       // 0-1 screen x at initial view
+  ry: number;       // 0-1 screen y at initial view
+  radiusPx: number; // fixed pixel radius (altitude-independent)
   heat: number;
   oscSpeed: number;
   oscPhase: number;
@@ -119,19 +121,19 @@ export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false }: F
     startTimeRef.current = performance.now();
 
     const rng = seedRng(Math.round(lat * 137 + lon * 251));
-    terrainRef.current = Array.from({ length: 10 }, () => ({
-      dlat: (rng() - 0.5) * 0.08,
-      dlon: (rng() - 0.5) * 0.08,
-      radiusKm: rng() * 0.7 + 0.15,
-      heat: rng() * 38 + 18,
-      oscSpeed: rng() * 0.4 + 0.08,
+    terrainRef.current = Array.from({ length: 14 }, () => ({
+      rx: rng(),           // 0-1
+      ry: rng(),           // 0-1
+      radiusPx: rng() * 180 + 60,  // 60-240px — always visible
+      heat: rng() * 55 + 38,       // 38-93 brightness
+      oscSpeed: rng() * 0.35 + 0.06,
       oscPhase: rng() * Math.PI * 2,
     }));
 
     const nd = new Uint8ClampedArray(new ArrayBuffer(NOISE_W * NOISE_H * 4));
     const rng2 = seedRng(99);
     for (let i = 0; i < NOISE_W * NOISE_H; i++) {
-      const v = Math.round(rng2() * 22 + 4);
+      const v = Math.round(rng2() * 50 + 18); // brighter: 18-68
       nd[i * 4] = v; nd[i * 4 + 1] = v; nd[i * 4 + 2] = v; nd[i * 4 + 3] = 255;
     }
     noiseRef.current = nd;
@@ -180,19 +182,24 @@ export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false }: F
       }
 
       // ── 1. Background ──
-      ctx.fillStyle = "#0a0a0c";
+      ctx.fillStyle = "#1c1c24";
       ctx.fillRect(0, 0, W, H);
 
-      // ── 2. Terrain blobs ──
+      // ── 2. Terrain heat patches (screen-space — visible at any altitude) ──
+      // Blobs drift slowly as drone moves (parallax at fixed 80 px/km)
+      const TERRAIN_DRIFT = 80; // px/km — decoupled from target zoom scale
+      const dlatKmDrift = (lat - (terrainRef.current[0]?.rx ?? lat)) * 0; // we use cosLat below
+      void dlatKmDrift; // terrain drift is applied per blob using drone delta from start
       for (const blob of terrainRef.current) {
-        const pulse = Math.sin(t * blob.oscSpeed + blob.oscPhase) * 5;
-        const heat = Math.round(blob.heat + pulse);
-        const bx = W / 2 + blob.dlon * 111 * cosLat * scale;
-        const by = H / 2 - blob.dlat * 111 * scale;
-        const br = Math.max(8, blob.radiusKm * scale);
+        const pulse = Math.sin(t * blob.oscSpeed + blob.oscPhase) * 7;
+        const heat = Math.round(Math.min(255, blob.heat + pulse));
+        // Screen-space position, slowly shifting based on drone movement
+        const bx = blob.rx * W + ((lon - (lon | 0)) * 111 * cosLat * TERRAIN_DRIFT) % W;
+        const by = blob.ry * H - ((lat - (lat | 0)) * 111 * TERRAIN_DRIFT) % H;
+        const br = blob.radiusPx;
         const g = ctx.createRadialGradient(bx, by, 0, bx, by, br);
-        g.addColorStop(0, `rgba(${heat},${heat},${heat + 2},0.5)`);
-        g.addColorStop(0.55, `rgba(${Math.round(heat * 0.45)},${Math.round(heat * 0.45)},${Math.round(heat * 0.45)},0.25)`);
+        g.addColorStop(0, `rgba(${heat},${heat},${heat + 3},0.75)`);
+        g.addColorStop(0.5, `rgba(${Math.round(heat * 0.5)},${Math.round(heat * 0.5)},${Math.round(heat * 0.5)},0.4)`);
         g.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, W, H);
@@ -207,14 +214,14 @@ export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false }: F
           const count = Math.round(NOISE_W * NOISE_H * 0.18);
           for (let k = 0; k < count; k++) {
             const i = Math.floor(Math.random() * NOISE_W * NOISE_H);
-            const v = Math.round(Math.random() * 30 + 3);
+            const v = Math.round(Math.random() * 55 + 15); // brighter grain
             nd[i * 4] = v; nd[i * 4 + 1] = v; nd[i * 4 + 2] = v;
           }
           const imgData = nctx.createImageData(NOISE_W, NOISE_H);
           imgData.data.set(nd);
           nctx.putImageData(imgData, 0, 0);
           ctx.save();
-          ctx.globalAlpha = 0.28;
+          ctx.globalAlpha = 0.52;
           ctx.drawImage(nc, 0, 0, W, H);
           ctx.restore();
         }
@@ -264,7 +271,7 @@ export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false }: F
       // ── 7. Vignette ──
       const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.min(W, H) * 0.78);
       vig.addColorStop(0, "rgba(0,0,0,0)");
-      vig.addColorStop(1, "rgba(0,0,0,0.68)");
+      vig.addColorStop(1, "rgba(0,0,0,0.42)");
       ctx.fillStyle = vig;
       ctx.fillRect(0, 0, W, H);
 
