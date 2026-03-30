@@ -42,6 +42,7 @@ export interface MapViewProps {
   plannedLines?: Array<{ from: [number, number]; to: [number, number] }> | null;
   /** Blue dotted lines showing movement orders (current position → destination). */
   movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
+  flyTo?: { lat: number; lng: number; zoom?: number } | null;
 }
 
 const MapViewInner = dynamic(

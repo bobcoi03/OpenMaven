@@ -431,9 +431,15 @@ export default function DecisionsPage() {
   }, [groupBy, filteredTargets, visibleStages, allTargets]);
 
   const handleCardClick = useCallback(
-    (t: DetectionTarget) =>
-      router.push(`/map?lat=${encodeURIComponent(t.detection.lat)}&lng=${encodeURIComponent(t.detection.lon)}`),
-    [router],
+    (t: DetectionTarget) => {
+      // Use live position from current detections or sim assets, fall back to stale detection coords
+      const liveDetection = sim.detections[t.detection.asset_id];
+      const liveAsset = sim.assets[t.detection.asset_id];
+      const lat = liveDetection?.lat ?? liveAsset?.position.latitude ?? t.detection.lat;
+      const lng = liveDetection?.lon ?? liveAsset?.position.longitude ?? t.detection.lon;
+      router.push(`/map?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`);
+    },
+    [router, sim.detections, sim.assets],
   );
 
   function toggleFlag(id: string) {
@@ -780,14 +786,14 @@ export default function DecisionsPage() {
 
       {/* ── Board view ───────────────────────────────────────────────────────── */}
       {viewMode === "board" && (
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-2">
-          <div className="flex h-full gap-1.5 min-w-max">
+        <div className="flex-1 overflow-hidden p-2">
+          <div className="flex h-full gap-1.5">
             {columns.map(col => {
               const isDragTarget = groupBy === "stage" && dragOverColumn === col.key;
               return (
               <div
                 key={col.key}
-                className="flex flex-col"
+                className="flex flex-col flex-1 min-w-0"
                 onDragOver={groupBy === "stage" ? (e) => { e.preventDefault(); setDragOverColumn(col.key); } : undefined}
                 onDragLeave={groupBy === "stage" ? () => setDragOverColumn(null) : undefined}
                 onDrop={groupBy === "stage" ? (e) => {
@@ -797,7 +803,6 @@ export default function DecisionsPage() {
                   if (targetId) sim.setTargetStage(targetId, col.key);
                 } : undefined}
                 style={{
-                  width: 210,
                   background: isDragTarget ? T.bgElevated : T.bgPrimary,
                   border: isDragTarget ? `1px solid ${col.color}88` : `1px solid ${T.border}`,
                   borderTop: `2px solid ${isDragTarget ? col.color : col.color + "55"}`,
@@ -807,22 +812,20 @@ export default function DecisionsPage() {
               >
                 {/* Column header */}
                 <div
-                  className="flex items-center gap-2 px-2.5 shrink-0"
-                  style={{ height: 32, background: T.bgElevated, borderBottom: `1px solid ${T.border}` }}
+                  className="flex items-center gap-1 px-1.5 shrink-0"
+                  style={{ height: 24, background: T.bgElevated, borderBottom: `1px solid ${T.border}` }}
                 >
-                  <div style={{ width: 7, height: 7, background: col.color, borderRadius: 1, flexShrink: 0 }} />
-                  <span className="flex-1 font-bold uppercase" style={{ fontSize: 10, color: T.textPrimary, letterSpacing: "0.1em" }}>
+                  <div style={{ width: 5, height: 5, background: col.color, borderRadius: 1, flexShrink: 0 }} />
+                  <span className="flex-1 font-bold uppercase" style={{ fontSize: 8, color: T.textPrimary, letterSpacing: "0.06em" }}>
                     {col.label}
                   </span>
-                  <span className="font-mono" style={{ fontSize: 10, color: T.textMuted, background: T.bgDeep, padding: "1px 5px", borderRadius: 2, border: `1px solid ${T.border}` }}>
+                  <span className="font-mono" style={{ fontSize: 8, color: T.textMuted, background: T.bgDeep, padding: "0px 3px", borderRadius: 2, lineHeight: "14px" }}>
                     {col.targets.length}
                   </span>
-                  <button style={{ color: T.textDisabled, padding: 2, lineHeight: 1 }}><ChevronLeft size={10} /></button>
-                  <button style={{ color: T.textDisabled, padding: 2, lineHeight: 1 }}><ChevronRight size={10} /></button>
                 </div>
 
                 {/* Cards */}
-                <div className="flex-1 overflow-y-auto px-1.5 py-1.5 space-y-1.5">
+                <div className="flex-1 overflow-y-auto px-1 py-1 space-y-1">
                   {loading ? (
                     <>{Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}</>
                   ) : col.targets.length === 0 ? (
@@ -851,8 +854,8 @@ export default function DecisionsPage() {
                         style={{
                           background: col.cardBg,
                           border: isFlash ? `1px solid rgba(250,204,21,0.6)` : `1px solid ${T.borderStrong}`,
-                          borderRadius: 3,
-                          padding: "8px 10px 6px",
+                          borderRadius: 2,
+                          padding: "4px 5px 3px",
                           cursor: "pointer",
                         }}
                       >
@@ -861,75 +864,65 @@ export default function DecisionsPage() {
                           <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: T.gold, borderRadius: "3px 0 0 3px" }} />
                         )}
 
-                        {/* Row 1: Asset type (hero) + confidence badge */}
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <div style={{ width: 7, height: 7, background: T.hostile, transform: "rotate(45deg)", flexShrink: 0 }} />
-                          <span className="flex-1 min-w-0 truncate" style={{ fontSize: 12, color: T.textPrimary, fontWeight: 700 }}>
+                        {/* Row 1: Asset type + confidence */}
+                        <div className="flex items-start gap-1 mb-0.5">
+                          <div style={{ width: 5, height: 5, background: T.hostile, transform: "rotate(45deg)", flexShrink: 0, marginTop: 2 }} />
+                          <span className="flex-1 min-w-0" style={{ fontSize: 9, color: T.textPrimary, fontWeight: 700, lineHeight: "12px" }}>
                             {t.detection.asset_type}
                           </span>
                           <span className="font-mono shrink-0" style={{
-                            fontSize: 10, fontWeight: 700, color: confColor,
-                            background: `${confColor}18`, border: `1px solid ${confColor}40`,
-                            borderRadius: 2, padding: "1px 5px", lineHeight: "16px",
+                            fontSize: 8, fontWeight: 700, color: confColor,
+                            background: `${confColor}18`,
+                            borderRadius: 2, padding: "0px 3px", lineHeight: "12px",
                           }}>
                             {conf}%
                           </span>
                         </div>
 
-                        {/* Row 2: Track ID + grid ref */}
-                        <div className="flex items-center gap-2 mb-2" style={{ paddingLeft: 15 }}>
-                          <span className="font-mono" style={{ fontSize: 9, color: T.textMuted, letterSpacing: "0.06em" }}>
+                        {/* Row 2: Tags */}
+                        <div className="flex flex-wrap items-center gap-0.5 mb-0.5" style={{ paddingLeft: 10 }}>
+                          <span className="font-mono" style={{ fontSize: 7, color: T.textDisabled }}>
                             {trackId}
                           </span>
-                          <span style={{ color: T.border }}>|</span>
-                          <MapPin size={8} style={{ color: T.textDisabled, flexShrink: 0 }} />
-                          <span className="font-mono" style={{ fontSize: 9, color: T.textDisabled }}>
-                            {shortGrid(t.detection.grid_ref)}
-                          </span>
-                        </div>
-
-                        {/* Row 3: Tags — source + classification */}
-                        <div className="flex items-center gap-1.5 mb-2" style={{ paddingLeft: 15 }}>
                           <span style={{
-                            fontSize: 9, fontWeight: 600, color: srcColor,
-                            background: `${srcColor}15`, border: `1px solid ${srcColor}30`,
-                            borderRadius: 2, padding: "0px 4px", lineHeight: "15px",
+                            fontSize: 7, fontWeight: 600, color: srcColor,
+                            background: `${srcColor}15`,
+                            borderRadius: 1, padding: "0px 2px", lineHeight: "11px",
                           }}>
                             {t.detection.source_label}
                           </span>
                           {t.detection.classification !== "UNCLASSIFIED" && (
                             <span style={{
-                              fontSize: 9, color: T.textMuted,
-                              background: T.bgSurface, border: `1px solid ${T.border}`,
-                              borderRadius: 2, padding: "0px 4px", lineHeight: "15px",
+                              fontSize: 7, color: T.textMuted,
+                              background: T.bgSurface,
+                              borderRadius: 1, padding: "0px 2px", lineHeight: "11px",
                             }}>
                               {t.detection.classification}
                             </span>
                           )}
                           {expired && (
                             <span style={{
-                              fontSize: 9, fontWeight: 600, color: T.orangeLt,
-                              background: `${T.orangeLt}15`, border: `1px solid ${T.orangeLt}30`,
-                              borderRadius: 2, padding: "0px 4px", lineHeight: "15px",
+                              fontSize: 7, fontWeight: 600, color: T.orangeLt,
+                              borderRadius: 1, padding: "0px 2px", lineHeight: "11px",
                             }}>
-                              EXPIRED
+                              EXP
                             </span>
                           )}
                         </div>
 
                         {/* Footer */}
-                        <div className="flex items-center justify-between" style={{ paddingTop: 4, borderTop: `1px solid ${T.border}` }}>
-                          <span style={{ fontSize: 9, color: T.textDisabled }}>{timeAgo(t.updated_at)}</span>
-                          <div className="flex items-center gap-1.5">
+                        <div className="flex items-center justify-between" style={{ paddingTop: 2, borderTop: `1px solid ${T.border}` }}>
+                          <span style={{ fontSize: 7, color: T.textDisabled }}>{timeAgo(t.updated_at)}</span>
+                          <div className="flex items-center gap-1">
                             {(conf < 70 || expired) && (
-                              <AlertTriangle size={9} style={{ color: T.gold }} />
+                              <AlertTriangle size={7} style={{ color: T.gold }} />
                             )}
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleFlag(t.target_id); }}
                               title={isFlagged ? "Remove flag" : "Flag target"}
                               style={{ lineHeight: 1, color: isFlagged ? T.gold : T.textDisabled }}
                             >
-                              <Flag size={9} />
+                              <Flag size={7} />
                             </button>
                           </div>
                         </div>

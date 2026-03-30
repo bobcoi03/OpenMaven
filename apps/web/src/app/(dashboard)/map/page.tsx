@@ -8,6 +8,7 @@
  */
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { MapView } from "@/components/map-view";
 import { MAP_STYLES, type MapStyleId } from "@/components/map-view-inner";
 import { SimulationControls } from "@/components/simulation-controls";
@@ -26,7 +27,16 @@ import { findBestPairing, findAllPairings, refreshPairing, type PairingSelection
 
 export default function MapPage() {
   const { visibleLayers, selectedAsset, setSelectedAsset } = useMapLayers();
+  const searchParams = useSearchParams();
   const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
+
+  // Read lat/lng from URL (e.g. /map?lat=33.5&lng=42.8) for fly-to on load
+  const flyTo = useMemo(() => {
+    const lat = parseFloat(searchParams.get("lat") ?? "");
+    const lng = parseFloat(searchParams.get("lng") ?? "");
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat, lng, zoom: 12 };
+  }, [searchParams]);
   const [showSensorRanges, setShowSensorRanges] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef<HTMLDivElement>(null);
@@ -323,6 +333,7 @@ export default function MapPage() {
           strikeLines={strikeLines}
           plannedLines={plannedLines}
           movementLines={movementLines}
+          flyTo={flyTo}
         />
 
         {/* Move-mode indicator */}
