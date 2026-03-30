@@ -204,6 +204,25 @@
     border-bottom-color: var(--om-bg-primary) !important;
   }
 
+  /* Card update highlight — flashes a yellow glow when data updates in-place */
+  @keyframes card-flash {
+    0%   { box-shadow: 0 0 0 1px rgba(250,204,21,0.8), 0 0 16px rgba(250,204,21,0.25); }
+    60%  { box-shadow: 0 0 0 1px rgba(250,204,21,0.4), 0 0 8px rgba(250,204,21,0.1); }
+    100% { box-shadow: none; }
+  }
+  .card-flash {
+    animation: card-flash 0.85s ease-out forwards;
+  }
+
+  /* Targeting board dot glow pulse */
+  @keyframes dot-glow {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.45; }
+  }
+  .dot-glow {
+    animation: dot-glow 2.2s ease-in-out infinite;
+  }
+
   /* Tactical map marker pulse — applied to CRITICAL infrastructure */
   @keyframes tac-pulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
