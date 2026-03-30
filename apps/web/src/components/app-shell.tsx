@@ -8,7 +8,7 @@ import { AssetDetailPanel } from "@/components/asset-detail-panel";
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { searchObjects, queryKnowledgeGraphStream, querySimulationStream, type QueryChatMessage, type QueryStreamEvent } from "@/lib/api-client";
+import { searchObjects, querySimulationStream, type QueryChatMessage, type QueryStreamEvent } from "@/lib/api-client";
 import type { ObjectInstance } from "@/lib/api-types";
 import { MOCK_TACTICAL_ASSETS, type AssetClass } from "@/lib/tactical-mock";
 import {
@@ -32,8 +32,6 @@ import {
   Swords,
   Route,
   Shield,
-  Database,
-  GitBranch,
 } from "lucide-react";
 
 const TABS = [
@@ -306,7 +304,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── AI query handler ──────────────────────────────────────────────
-  const isMapRoute = pathname === "/map";
 
   async function handleQuerySubmit() {
     const question = queryText.trim();
@@ -319,7 +316,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setIsQuerying(true);
     setToolSteps([]);
 
-    const streamFn = isMapRoute ? querySimulationStream : queryKnowledgeGraphStream;
+    const streamFn = querySimulationStream;
 
     let streamingText = "";
 
@@ -612,29 +609,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <div className="flex items-center gap-2 mb-3">
                   <Bot size={14} className="text-[var(--om-blue)]" />
                   <span className="text-[11px] font-semibold text-[var(--om-text-primary)]">
-                    {isMapRoute ? "C2 Operator" : "Knowledge Graph Agent"}
+                    C2 Operator
                   </span>
                 </div>
                 <p className="text-[10px] text-[var(--om-text-secondary)] leading-[1.6]">
-                  {isMapRoute
-                    ? "Tactical AI assistant with live access to the simulation."
-                    : "AI assistant with access to your knowledge graph."}
+                  Tactical AI assistant with live access to the simulation.
                 </p>
                 <div className="space-y-1.5">
-                  {(isMapRoute
-                    ? [
-                        { icon: Radar, label: "Battlefield overview", desc: "Force disposition, faction status" },
-                        { icon: Search, label: "Find & track assets", desc: "Locate units by name, type, or area" },
-                        { icon: Swords, label: "Plan & execute strikes", desc: "Weapon selection, target assessment" },
-                        { icon: Route, label: "Order movements", desc: "Reposition assets to coordinates" },
-                        { icon: Shield, label: "Faction intelligence", desc: "Doctrine, morale, capabilities" },
-                      ]
-                    : [
-                        { icon: Database, label: "Query entities", desc: "Search across all object types" },
-                        { icon: GitBranch, label: "Explore relationships", desc: "Traverse links between entities" },
-                        { icon: Search, label: "Natural language search", desc: "Ask questions in plain English" },
-                      ]
-                  ).map(({ icon: Icon, label, desc }) => (
+                  {[
+                    { icon: Radar, label: "Battlefield overview", desc: "Force disposition, faction status" },
+                    { icon: Search, label: "Find & track assets", desc: "Locate units by name, type, or area" },
+                    { icon: Swords, label: "Plan & execute strikes", desc: "Weapon selection, target assessment" },
+                    { icon: Route, label: "Order movements", desc: "Reposition assets to coordinates" },
+                    { icon: Shield, label: "Faction intelligence", desc: "Doctrine, morale, capabilities" },
+                  ].map(({ icon: Icon, label, desc }) => (
                     <div
                       key={label}
                       className="flex items-start gap-2.5 px-2.5 py-2 border border-[var(--om-border)] bg-[var(--om-bg-deep)]/40"
@@ -764,7 +752,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     handleQuerySubmit();
                   }
                 }}
-                placeholder={isMapRoute ? "Ask about the battlefield..." : "Ask about the knowledge graph..."}
+                placeholder="Ask about the battlefield..."
                 rows={1}
                 className="w-full px-3 pt-2 pb-1 text-[11px] text-[var(--om-text-primary)] placeholder:text-[var(--om-text-disabled)] bg-transparent border-none outline-none resize-none leading-[1.6]"
                 style={{ minHeight: "28px", maxHeight: "120px", fieldSizing: "content" } as React.CSSProperties}
