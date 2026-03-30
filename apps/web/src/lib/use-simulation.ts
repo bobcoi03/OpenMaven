@@ -171,6 +171,10 @@ interface UseSimulationReturn {
   abortMission: (missionId: string) => void;
   /** Move an asset */
   moveAsset: (assetId: string, lat: number, lon: number) => void;
+  /** Advance a target one stage forward on the targeting board */
+  advanceTarget: (targetId: string) => void;
+  /** Set a target to a specific stage (for drag-and-drop) */
+  setTargetStage: (targetId: string, stage: string) => void;
   /** Request full state refresh */
   refresh: () => void;
 }
@@ -226,6 +230,14 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
 
   const moveAsset = useCallback((assetId: string, lat: number, lon: number) => {
     send({ type: "move", asset_id: assetId, latitude: lat, longitude: lon });
+  }, [send]);
+
+  const advanceTarget = useCallback((targetId: string) => {
+    send({ type: "advance_target", target_id: targetId });
+  }, [send]);
+
+  const setTargetStage = useCallback((targetId: string, stage: string) => {
+    send({ type: "set_target_stage", target_id: targetId, stage });
   }, [send]);
 
   const refresh = useCallback(() => {
@@ -481,6 +493,8 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
     strikeMission,
     abortMission,
     moveAsset,
+    advanceTarget,
+    setTargetStage,
     refresh,
   };
 }

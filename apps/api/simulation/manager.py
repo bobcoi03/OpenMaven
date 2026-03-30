@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from detection.detection_engine import process_assets
 from detection.models import Asset as DetectionAsset, Detection, Target, TargetStage, TargetingBoard
-from detection.targeting_board import auto_triage, create_target
+from detection.targeting_board import advance_target, auto_triage, create_target, set_target_stage
 from simulation.assets import AssetStatus, MovementOrder, Position, SimAsset
 from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
@@ -432,6 +432,15 @@ class SimulationManager:
         )
         self.active_missions[mission_id] = mission
 
+        # Advance target on board: → PAIRED → IN_EXECUTION
+        if target_id in self.targeting_board.targets:
+            self.targeting_board = set_target_stage(
+                target_id, TargetStage.PAIRED, self.targeting_board,
+            )
+            self.targeting_board = set_target_stage(
+                target_id, TargetStage.IN_EXECUTION, self.targeting_board,
+            )
+
         return {
             "mission_id": mission_id,
             "distance_km": move_result["distance_km"],
@@ -481,6 +490,10 @@ class SimulationManager:
         if shooter is None or not shooter.is_alive():
             mission.status = "aborted"
             mission.result = {"outcome": "aborted", "description": "Shooter destroyed en route."}
+            if mission.target_id in self.targeting_board.targets:
+                self.targeting_board = set_target_stage(
+                    mission.target_id, TargetStage.PENDING_PAIRING, self.targeting_board,
+                )
             _finish_mission()
             return
 
@@ -490,6 +503,10 @@ class SimulationManager:
             mission.result = {"outcome": "aborted", "description": "Target already destroyed."}
             shooter.status = AssetStatus.ACTIVE
             self.assign_patrol(shooter.asset_id)
+            if mission.target_id in self.targeting_board.targets:
+                self.targeting_board = set_target_stage(
+                    mission.target_id, TargetStage.PENDING_PAIRING, self.targeting_board,
+                )
             _finish_mission()
             return
 
@@ -500,6 +517,10 @@ class SimulationManager:
             mission.result = {"outcome": "aborted", "description": f"Unknown weapon: {mission.weapon_id}"}
             shooter.status = AssetStatus.ACTIVE
             self.assign_patrol(shooter.asset_id)
+            if mission.target_id in self.targeting_board.targets:
+                self.targeting_board = set_target_stage(
+                    mission.target_id, TargetStage.PENDING_PAIRING, self.targeting_board,
+                )
             _finish_mission()
             return
 
@@ -528,6 +549,12 @@ class SimulationManager:
                 target.position.latitude, target.position.longitude,
             ), 1),
         }
+
+        # Advance target on board to COMPLETE
+        if mission.target_id in self.targeting_board.targets:
+            self.targeting_board = set_target_stage(
+                mission.target_id, TargetStage.COMPLETE, self.targeting_board,
+            )
 
         shooter.status = AssetStatus.ACTIVE
         self.assign_patrol(shooter.asset_id)
@@ -641,6 +668,21 @@ class SimulationManager:
                 for detection in new_detections
             ],
         }
+
+    # ── Board broadcast ────────────────────────────────────────────────────
+
+    async def _broadcast_board(self) -> None:
+        """Serialize the targeting board and broadcast to all clients."""
+        if self._broadcast_fn is None:
+            return
+        payload = {
+            "board_state": [
+                _serialize_target(target)
+                for target in self.targeting_board.targets.values()
+            ],
+            "new_detections": [],
+        }
+        await self._broadcast_fn({"type": "detections", "data": payload})
 
     # ── Tick loop ─────────────────────────────────────────────────────────
 

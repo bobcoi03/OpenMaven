@@ -70,6 +70,24 @@ def advance_target(target_id: str, board: TargetingBoard) -> TargetingBoard:
     return _replace_target(board, updated)
 
 
+def set_target_stage(target_id: str, new_stage: TargetStage, board: TargetingBoard) -> TargetingBoard:
+    """Set a target to an arbitrary stage (for drag-and-drop). No-op if target not found."""
+    target = board.targets.get(target_id)
+    if target is None:
+        return board
+    now = datetime.now(timezone.utc)
+    updated = Target(
+        target_id=target.target_id,
+        detection=target.detection,
+        stage=new_stage,
+        created_at=target.created_at,
+        updated_at=now,
+        history=[*target.history, (new_stage, now)],
+    )
+    logger.info("Target %s stage set: %s → %s", target_id, target.stage.value, new_stage.value)
+    return _replace_target(board, updated)
+
+
 def get_board(board: TargetingBoard) -> list[Target]:
     """Return all targets currently on the board as a flat list."""
     return list(board.targets.values())
