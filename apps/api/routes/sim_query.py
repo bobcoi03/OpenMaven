@@ -386,6 +386,93 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_detected_contacts",
+            "description": (
+                "Get all hostile assets currently detected by friendly sensors. "
+                "Returns target_id, confidence (0-1), detecting sensor asset, "
+                "and live lat/lon. This is the fog-of-war view — only shows "
+                "what our sensors can actually see right now."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_ghost_contacts",
+            "description": (
+                "Get lost contacts — hostile assets previously detected but no "
+                "longer in sensor range. Returns last-known position, tick when "
+                "contact was lost, and confidence at loss. Ghosts expire after "
+                "60 ticks. Use this to identify sensor gaps or plan search missions."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_weapon_effectiveness",
+            "description": (
+                "Look up hit probability, kill probability, and damage stats for "
+                "a weapon against a target type — without needing a specific attacker. "
+                "Use this to quickly compare weapons or assess if a weapon class "
+                "can defeat a target category."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "weapon_id": {
+                        "type": "string",
+                        "description": (
+                            "Weapon ID (e.g. 'hellfire', 'gbu_38_jdam', 'javelin'). "
+                            "Use get_force_disposition to see available weapons."
+                        ),
+                    },
+                    "target_type": {
+                        "type": "string",
+                        "description": (
+                            "Asset type of the target (e.g. 'T-72A MBT', 'Su-35S Flanker-E'). "
+                            "Must match an asset_type from the simulation."
+                        ),
+                    },
+                },
+                "required": ["weapon_id", "target_type"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate_travel_time",
+            "description": (
+                "Calculate how long it takes an asset to reach a destination. "
+                "Returns distance, ETA in ticks, bearing, and effective speed. "
+                "Does NOT issue a move order — just a planning calculation."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "asset_id": {
+                        "type": "string",
+                        "description": "Asset ID or callsign of the asset to calculate for.",
+                    },
+                    "dest_lat": {
+                        "type": "number",
+                        "description": "Destination latitude.",
+                    },
+                    "dest_lon": {
+                        "type": "number",
+                        "description": "Destination longitude.",
+                    },
+                },
+                "required": ["asset_id", "dest_lat", "dest_lon"],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """\
@@ -449,8 +536,24 @@ Coordination principles:
   (SAMs, C2 nodes, artillery) over soft targets (trucks, infantry).
 - Report which targets cannot be engaged due to lack of available shooters.
 
+Situational awareness (fog of war):
+- Use get_detected_contacts to see what our sensors currently track. This is the TRUE
+  picture — only these hostiles are confirmed visible. Other assets may exist but be
+  outside sensor range.
+- Use get_ghost_contacts to see lost contacts (last-known positions of hostiles that
+  dropped off sensors). Ghosts expire after 60 ticks.
+- When planning strikes, prefer targets with HIGH detection confidence (>0.7).
+  Low-confidence contacts may have inaccurate positions.
+
+Pre-strike analysis:
+- Use query_weapon_effectiveness(weapon_id, target_type) to quickly check if a weapon
+  can kill a target type without needing a specific attacker asset.
+- Use calculate_travel_time(asset_id, dest_lat, dest_lon) to estimate ETA before
+  committing to a mission. This does NOT issue a move order.
+
 Guidelines:
 - Start with get_battlefield_summary to orient yourself.
+- Use get_detected_contacts for the fog-of-war picture before planning strikes.
 - Use find_assets for fuzzy lookups (e.g. "find the F-16", "where are tanks").
 - Be concise and tactical. Use callsigns, not asset IDs, when talking to the operator.
 - Report positions as lat/lon rounded to 2 decimal places.
@@ -955,6 +1058,149 @@ def handle_plan_multi_strike(
     }, indent=2)
 
 
+def handle_get_detected_contacts() -> str:
+    """Return all hostile assets currently detected by friendly sensors."""
+    sim = _get_sim()
+    contacts = []
+    for target_id, reading in sim._detected.items():
+        target = sim.assets.get(target_id)
+        sensor = sim.assets.get(reading.sensor_asset_id)
+        contacts.append({
+            "target_id": target_id,
+            "target_callsign": target.callsign if target else "?",
+            "target_type": target.asset_type if target else "?",
+            "target_health": target.health if target else 0,
+            "confidence": round(reading.confidence, 3),
+            "lat": round(reading.lat, 4),
+            "lon": round(reading.lon, 4),
+            "detected_by": {
+                "asset_id": reading.sensor_asset_id,
+                "callsign": sensor.callsign if sensor else "?",
+                "sensor_type": sensor.sensor_type if sensor else "?",
+            },
+        })
+    contacts.sort(key=lambda c: c["confidence"], reverse=True)
+    return json.dumps({
+        "contacts": contacts,
+        "total_detected": len(contacts),
+        "current_tick": sim.tick,
+    }, indent=2)
+
+
+def handle_get_ghost_contacts() -> str:
+    """Return lost contacts — previously detected hostiles no longer in sensor range."""
+    sim = _get_sim()
+    ghosts = []
+    for target_id, ghost in sim._ghosts.items():
+        target = sim.assets.get(target_id)
+        ticks_since_lost = sim.tick - ghost.last_seen_tick
+        ghosts.append({
+            "target_id": target_id,
+            "target_callsign": target.callsign if target else "?",
+            "target_type": target.asset_type if target else "?",
+            "last_lat": round(ghost.last_lat, 4),
+            "last_lon": round(ghost.last_lon, 4),
+            "last_seen_tick": ghost.last_seen_tick,
+            "ticks_since_lost": ticks_since_lost,
+            "confidence_at_loss": round(ghost.confidence_at_loss, 3),
+            "still_alive": target.is_alive() if target else False,
+        })
+    ghosts.sort(key=lambda g: g["ticks_since_lost"])
+    return json.dumps({
+        "ghosts": ghosts,
+        "total_ghosts": len(ghosts),
+        "current_tick": sim.tick,
+        "ghost_expiry_ticks": 60,
+    }, indent=2)
+
+
+def handle_query_weapon_effectiveness(weapon_id: str, target_type: str) -> str:
+    """Look up weapon effectiveness against a target type."""
+    from simulation.profiles import WEAPON_PROFILES, CATEGORY_MAP, STRIKE_PROFILES
+
+    wp = WEAPON_PROFILES.get(weapon_id)
+    if wp is None:
+        available = list(WEAPON_PROFILES.keys())
+        return json.dumps({
+            "error": f"Unknown weapon '{weapon_id}'.",
+            "available_weapons": available,
+        })
+
+    target_profile = get_strike_profile(target_type)
+    category = CATEGORY_MAP.get(target_type, "soft_vehicle")
+
+    hit_prob = wp.accuracy
+    kill_prob = min(wp.penetration / max(target_profile.hardness, 0.01), 1.0)
+    overall_kill = hit_prob * kill_prob
+
+    return json.dumps({
+        "weapon_id": weapon_id,
+        "weapon": {
+            "accuracy": wp.accuracy,
+            "penetration": wp.penetration,
+            "blast_radius_m": wp.blast_radius_m,
+        },
+        "target_type": target_type,
+        "target_category": category,
+        "target": {
+            "hardness": target_profile.hardness,
+            "crew_survival": target_profile.crew_survival,
+        },
+        "effectiveness": {
+            "hit_probability_pct": round(hit_prob * 100),
+            "kill_given_hit_pct": round(kill_prob * 100),
+            "overall_kill_pct": round(overall_kill * 100),
+        },
+    }, indent=2)
+
+
+def handle_calculate_travel_time(asset_id: str, dest_lat: float, dest_lon: float) -> str:
+    """Calculate travel time for an asset to a destination without issuing an order."""
+    sim = _get_sim()
+    asset = _resolve_asset(sim, asset_id)
+    if asset is None:
+        return json.dumps({"error": f"Asset '{asset_id}' not found."})
+
+    speed = asset.max_speed_kmh or asset.speed_kmh
+    if speed <= 0:
+        return json.dumps({
+            "error": f"{asset.callsign} is stationary (speed=0) and cannot move.",
+            "asset_type": asset.asset_type,
+        })
+
+    distance = haversine_km(
+        asset.position.latitude, asset.position.longitude,
+        dest_lat, dest_lon,
+    )
+    from simulation.rules import bearing_degrees, ticks_to_arrive, TERRAIN_SPEED
+    terrain = "air" if asset.position.altitude_m > 100 else "open"
+    ticks = ticks_to_arrive(speed, distance, terrain, sim.tick_duration_s)
+    bearing = bearing_degrees(
+        asset.position.latitude, asset.position.longitude,
+        dest_lat, dest_lon,
+    )
+
+    return json.dumps({
+        "asset": {
+            "asset_id": asset.asset_id,
+            "callsign": asset.callsign,
+            "asset_type": asset.asset_type,
+            "current_lat": round(asset.position.latitude, 4),
+            "current_lon": round(asset.position.longitude, 4),
+        },
+        "destination": {
+            "lat": round(dest_lat, 4),
+            "lon": round(dest_lon, 4),
+        },
+        "distance_km": round(distance, 1),
+        "bearing_deg": round(bearing, 1),
+        "speed_kmh": speed,
+        "terrain": terrain,
+        "eta_ticks": ticks,
+        "eta_seconds": round(ticks * sim.tick_duration_s),
+    }, indent=2)
+
+
 TOOL_HANDLERS: dict[str, Any] = {
     "get_battlefield_summary": lambda args: handle_battlefield_summary(),
     "list_factions": lambda args: handle_list_factions(),
@@ -978,6 +1224,14 @@ TOOL_HANDLERS: dict[str, Any] = {
     "abort_mission": lambda args: handle_abort_mission(args["mission_id"]),
     "plan_multi_strike": lambda args: handle_plan_multi_strike(
         args.get("target_ids"), args.get("faction_id"), args.get("max_targets", 20),
+    ),
+    "get_detected_contacts": lambda args: handle_get_detected_contacts(),
+    "get_ghost_contacts": lambda args: handle_get_ghost_contacts(),
+    "query_weapon_effectiveness": lambda args: handle_query_weapon_effectiveness(
+        args["weapon_id"], args["target_type"],
+    ),
+    "calculate_travel_time": lambda args: handle_calculate_travel_time(
+        args["asset_id"], args["dest_lat"], args["dest_lon"],
     ),
 }
 
