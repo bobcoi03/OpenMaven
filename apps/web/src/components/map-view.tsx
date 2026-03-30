@@ -40,6 +40,8 @@ export interface MapViewProps {
   strikeLines?: Array<{ from: [number, number]; to: [number, number] }>;
   /** Yellow dashed lines showing AI-planned strikes (before execution). */
   plannedLines?: Array<{ from: [number, number]; to: [number, number] }> | null;
+  /** Blue dotted lines showing movement orders (current position → destination). */
+  movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
 }
 
 const MapViewInner = dynamic(

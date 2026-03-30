@@ -228,6 +228,19 @@ export default function MapPage() {
     return lines;
   }, [sim.activeMissions, sim.assets]);
 
+  // Compute movement lines for all assets with active movement orders
+  const movementLines = useMemo(() => {
+    const lines: Array<{ from: [number, number]; to: [number, number] }> = [];
+    for (const asset of Object.values(sim.assets)) {
+      if (!asset.movement_order || asset.status === "destroyed") continue;
+      lines.push({
+        from: [asset.position.longitude, asset.position.latitude],
+        to: [asset.movement_order.destination.longitude, asset.movement_order.destination.latitude],
+      });
+    }
+    return lines;
+  }, [sim.assets]);
+
   // ESC dismisses pairing panel (higher priority than move mode)
   useEffect(() => {
     if (!pairingSelection) return;
@@ -309,6 +322,7 @@ export default function MapPage() {
           strikeLine={strikeLine}
           strikeLines={strikeLines}
           plannedLines={plannedLines}
+          movementLines={movementLines}
         />
 
         {/* Move-mode indicator */}

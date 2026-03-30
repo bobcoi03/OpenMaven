@@ -49,6 +49,7 @@ interface TacticalMapProps {
   strikeLine?: { from: [number, number]; to: [number, number] } | null;
   strikeLines?: Array<{ from: [number, number]; to: [number, number] }>;
   plannedLines?: Array<{ from: [number, number]; to: [number, number] }> | null;
+  movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ export function MapViewInner({
   strikeLine,
   strikeLines,
   plannedLines,
+  movementLines,
 }: TacticalMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -103,6 +105,7 @@ export function MapViewInner({
     strikeLine,
     strikeLines,
     plannedLines,
+    movementLines,
   });
 
   useMapSensorCircles(mapRef, containerRef, {

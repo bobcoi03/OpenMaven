@@ -409,11 +409,12 @@ class SimulationManager:
         # Cancel the scheduled strike event
         self.event_queue.cancel_by_mission_id(mission_id)
 
-        # Reset shooter status
+        # Reset shooter status and resume patrol
         shooter = self.assets.get(mission.shooter_id)
         if shooter and shooter.is_alive():
             shooter.status = AssetStatus.ACTIVE
             shooter.movement_order = None
+            self.assign_patrol(shooter.asset_id)
 
         mission.status = "aborted"
         mission.result = {"outcome": "aborted", "description": "Mission aborted by operator."}
@@ -449,6 +450,7 @@ class SimulationManager:
             mission.status = "aborted"
             mission.result = {"outcome": "aborted", "description": "Target already destroyed."}
             shooter.status = AssetStatus.ACTIVE
+            self.assign_patrol(shooter.asset_id)
             _finish_mission()
             return
 
@@ -458,6 +460,7 @@ class SimulationManager:
             mission.status = "aborted"
             mission.result = {"outcome": "aborted", "description": f"Unknown weapon: {mission.weapon_id}"}
             shooter.status = AssetStatus.ACTIVE
+            self.assign_patrol(shooter.asset_id)
             _finish_mission()
             return
 
@@ -488,6 +491,7 @@ class SimulationManager:
         }
 
         shooter.status = AssetStatus.ACTIVE
+        self.assign_patrol(shooter.asset_id)
         _finish_mission()
 
     # ── Auto-patrol ─────────────────────────────────────────────────────

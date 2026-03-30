@@ -1,9 +1,10 @@
 /**
- * useMapLines — GeoJSON dashed line layers for strike missions and AI plans.
+ * useMapLines — GeoJSON dashed line layers for strike missions, AI plans, and movement orders.
  *
- * Manages two layers:
+ * Manages three layers:
  *   - strike-line (red dashed) — active missions + selected pairing
  *   - planned-line (yellow dashed) — AI-planned strikes before execution
+ *   - movement-line (blue dotted) — asset movement orders (current → destination)
  */
 
 import { useCallback, useEffect, useRef } from "react";
@@ -15,6 +16,7 @@ interface UseMapLinesOptions {
   strikeLine: LinePair | null | undefined;
   strikeLines: LinePair[] | undefined;
   plannedLines: LinePair[] | null | undefined;
+  movementLines: LinePair[] | undefined;
 }
 
 /** Generic helper: sync a GeoJSON line layer with a set of line features. */
@@ -74,6 +76,8 @@ export function useMapLines(
   strikeLinesRef.current = options.strikeLines;
   const plannedLinesRef = useRef(options.plannedLines);
   plannedLinesRef.current = options.plannedLines;
+  const movementLinesRef = useRef(options.movementLines);
+  movementLinesRef.current = options.movementLines;
 
   const drawAll = useCallback(() => {
     const map = mapRef.current;
@@ -93,12 +97,17 @@ export function useMapLines(
     const planned = plannedLinesRef.current;
     const plannedFeatures: GeoJSON.Feature[] = (planned ?? []).map(toFeature);
     syncLineLayer(map, "planned-line-source", "planned-line-layer", plannedFeatures, "#D4A017", [6, 4], 0.7);
+
+    // ── Movement lines (blue dotted) ────────────────────────
+    const movement = movementLinesRef.current;
+    const movementFeatures: GeoJSON.Feature[] = (movement ?? []).map(toFeature);
+    syncLineLayer(map, "movement-line-source", "movement-line-layer", movementFeatures, "#2D72D2", [3, 5], 0.45);
   }, [mapRef]);
 
   // Redraw when any line data changes
   useEffect(() => {
     drawAll();
-  }, [options.strikeLine, options.strikeLines, options.plannedLines, drawAll]);
+  }, [options.strikeLine, options.strikeLines, options.plannedLines, options.movementLines, drawAll]);
 
   // Re-apply after style changes (setStyle nukes all sources/layers)
   useEffect(() => {
