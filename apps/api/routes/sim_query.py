@@ -13,16 +13,16 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from openai import OpenAI
 from pydantic import BaseModel
 
+from dependencies import get_llm_client, LLM_MODEL
 from simulation.profiles import WEAPON_PROFILES, get_strike_profile
 from simulation.rules import haversine_km
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-MODEL = "gpt-5.4-mini"
+MODEL = LLM_MODEL
 MAX_AGENT_STEPS = 30
 
 
@@ -954,13 +954,13 @@ TOOL_HANDLERS: dict[str, Any] = {
 @router.post("/sim-query")
 async def query_simulation(req: SimQueryRequest) -> SimQueryResponse:
     """Non-streaming simulation query."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured.")
+    client = get_llm_client()
+    if not client:
+        raise HTTPException(status_code=503, detail="No LLM API key configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY in .env.")
 
     try:
         messages = _build_messages(req)
-        answer = _run_agent(messages, api_key)
+        answer = _run_agent(messages, client)
         return SimQueryResponse(answer=answer)
     except Exception as e:
         logger.exception("Sim query agent failed")
@@ -970,13 +970,13 @@ async def query_simulation(req: SimQueryRequest) -> SimQueryResponse:
 @router.post("/sim-query/stream")
 async def query_simulation_stream(req: SimQueryRequest) -> StreamingResponse:
     """Stream simulation query progress and final answer as SSE."""
-    api_key = os.environ.get("OPENAI_API_KEY")
+    client = get_llm_client()
 
     def event_stream() -> Generator[str, None, None]:
-        if not api_key:
+        if not client:
             yield _sse_event({
                 "type": "error",
-                "message": "OPENAI_API_KEY not configured.",
+                "message": "No LLM API key configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY in .env.",
             })
             return
 
@@ -985,7 +985,7 @@ async def query_simulation_stream(req: SimQueryRequest) -> StreamingResponse:
             answer = ""
             messages = _build_messages(req)
 
-            for event in _run_agent_stream(messages, api_key):
+            for event in _run_agent_stream(messages, client):
                 event_type = event.get("type")
                 if event_type == "final_answer":
                     answer = str(event.get("answer", "No response generated."))
@@ -1005,9 +1005,8 @@ async def query_simulation_stream(req: SimQueryRequest) -> StreamingResponse:
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-def _run_agent(messages: list[dict], api_key: str) -> str:
+def _run_agent(messages: list[dict], client) -> str:
     """Run the tool-calling agent loop until a final answer."""
-    client = OpenAI(api_key=api_key)
 
     for _ in range(MAX_AGENT_STEPS):
         response = client.chat.completions.create(
@@ -1033,9 +1032,8 @@ def _run_agent(messages: list[dict], api_key: str) -> str:
     return "I ran out of steps. Try a simpler question."
 
 
-def _run_agent_stream(messages: list[dict], api_key: str) -> Generator[dict, None, None]:
+def _run_agent_stream(messages: list[dict], client) -> Generator[dict, None, None]:
     """Run the agent loop with true token-by-token streaming for final answers."""
-    client = OpenAI(api_key=api_key)
 
     for step in range(MAX_AGENT_STEPS):
         step_num = step + 1
