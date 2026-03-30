@@ -20,6 +20,7 @@ interface FlirFeedProps {
   targetLat?: number | null;
   targetLon?: number | null;
   isStatic?: boolean;
+  targetDestroyed?: boolean;
 }
 
 // ── Seeded RNG (LCG) ─────────────────────────────────────────────────────────
@@ -108,13 +109,18 @@ interface TerrainBlob {
 const NOISE_W = 200;
 const NOISE_H = 120;
 
-export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false }: FlirFeedProps) {
+export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false, targetDestroyed = false }: FlirFeedProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>(0);
   const startTimeRef = useRef(0);
   const terrainRef = useRef<TerrainBlob[]>([]);
   const noiseRef = useRef<Uint8ClampedArray<ArrayBuffer> | null>(null);
   const noiseCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Last known target screen position — used as explosion center
+  const lastTargetPxRef = useRef<{ x: number; y: number } | null>(null);
+  // Explosion state: set when target is destroyed
+  const explosionRef = useRef<{ startT: number; cx: number; cy: number } | null>(null);
+  const prevDestroyedRef = useRef(false);
 
   // ── Init terrain + noise (once) ──────────────────────────────────────────
   useEffect(() => {
@@ -144,6 +150,21 @@ export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false }: F
     noiseCanvasRef.current = nc;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Trigger explosion when target is destroyed ───────────────────────────
+  useEffect(() => {
+    if (targetDestroyed && !prevDestroyedRef.current) {
+      const pos = lastTargetPxRef.current;
+      if (pos && explosionRef.current === null) {
+        explosionRef.current = {
+          startT: (performance.now() - startTimeRef.current) / 1000,
+          cx: pos.x,
+          cy: pos.y,
+        };
+      }
+    }
+    prevDestroyedRef.current = targetDestroyed;
+  }, [targetDestroyed]);
 
   // ── Animation loop ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -227,8 +248,13 @@ export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false }: F
         }
       }
 
-      // ── 4. Target heat signature ──
+      // Track last known target screen position for explosion center
       if (tx != null && ty != null) {
+        lastTargetPxRef.current = { x: tx, y: ty };
+      }
+
+      // ── 4. Target heat signature ──
+      if (tx != null && ty != null && !targetDestroyed) {
         const pulse = 0.78 + Math.sin(t * 3.8) * 0.13;
         const pulseFast = 0.9 + Math.sin(t * 7) * 0.1;
 
@@ -256,6 +282,59 @@ export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false }: F
 
         // Target reticle
         drawReticle(ctx, tx, ty, 38, `rgba(248,113,113,${0.7 + Math.sin(t * 4) * 0.15})`, "TGT");
+      }
+
+      // ── 4b. Explosion effect ──
+      if (explosionRef.current) {
+        const { startT, cx, cy } = explosionRef.current;
+        const elapsed = t - startT;
+
+        // Initial white flash (0 – 0.15s)
+        if (elapsed < 0.15) {
+          const alpha = 0.95 * (1 - elapsed / 0.15);
+          ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        // Expanding shockwave ring (0 – 2.5s)
+        if (elapsed < 2.5) {
+          const ringR = elapsed * 180 + 10;
+          const ringA = Math.max(0, 0.75 - elapsed * 0.3);
+          const ring = ctx.createRadialGradient(cx, cy, ringR * 0.75, cx, cy, ringR);
+          ring.addColorStop(0, "rgba(0,0,0,0)");
+          ring.addColorStop(0.6, `rgba(255,230,180,${ringA})`);
+          ring.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = ring;
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        // Fireball bloom (0 – 3.5s, cools and fades)
+        if (elapsed < 3.5) {
+          const bloomR = Math.min(110, elapsed * 80 + 18);
+          const bloomA = Math.max(0, 1 - elapsed / 3.5);
+          const bloom = ctx.createRadialGradient(cx, cy, 0, cx, cy, bloomR);
+          bloom.addColorStop(0, `rgba(255,255,220,${bloomA})`);
+          bloom.addColorStop(0.25, `rgba(255,200,120,${bloomA * 0.85})`);
+          bloom.addColorStop(0.55, `rgba(200,130,60,${bloomA * 0.55})`);
+          bloom.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = bloom;
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        // Lingering heat ember (3.5 – 7s)
+        if (elapsed >= 3.5 && elapsed < 7) {
+          const emberA = Math.max(0, 0.45 * (1 - (elapsed - 3.5) / 3.5));
+          const ember = ctx.createRadialGradient(cx, cy, 0, cx, cy, 35);
+          ember.addColorStop(0, `rgba(220,180,120,${emberA})`);
+          ember.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = ember;
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        // Clear after 7s
+        if (elapsed > 7) {
+          explosionRef.current = null;
+        }
       }
 
       // ── 5. Drone center reticle ──
@@ -300,7 +379,7 @@ export function FlirFeed({ lat, lon, targetLat, targetLon, isStatic = false }: F
     frameRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frameRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lat, lon, targetLat, targetLon, isStatic]);
+  }, [lat, lon, targetLat, targetLon, isStatic, targetDestroyed]);
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden">

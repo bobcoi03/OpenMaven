@@ -25,6 +25,7 @@ export default function CameraPage({ params }: PageProps) {
   const sim = useSimulation();
 
   const [isStatic, setIsStatic] = useState(false);
+  const [targetDestroyed, setTargetDestroyed] = useState(false);
   const destroyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const drone = sim.assets[assetId] ?? null;
@@ -47,6 +48,16 @@ export default function CameraPage({ params }: PageProps) {
   // Find the first active detection that this drone is sensing
   const trackedDetection =
     Object.values(sim.detections).find((d) => d.sensor_asset_id === assetId) ?? null;
+
+  // Watch for target asset being destroyed → trigger explosion on FLIR feed
+  useEffect(() => {
+    if (targetDestroyed) return; // already fired
+    const targetId = trackedDetection?.target_id;
+    if (!targetId) return;
+    if (sim.assets[targetId]?.status === "destroyed") {
+      setTargetDestroyed(true);
+    }
+  }, [trackedDetection?.target_id, sim.assets, targetDestroyed]);
 
   // ── Render: feed unavailable ────────────────────────────────────────────
 
@@ -136,6 +147,7 @@ export default function CameraPage({ params }: PageProps) {
             targetLat={trackedDetection?.lat ?? null}
             targetLon={trackedDetection?.lon ?? null}
             isStatic={isStatic}
+            targetDestroyed={targetDestroyed}
           />
         </div>
 
