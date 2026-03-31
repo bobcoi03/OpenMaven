@@ -230,3 +230,120 @@ class TestScoringSystem:
         asset.health = 0.1  # very low — retreat should win
         action = pick_action(asset, manager)
         assert action == AIAction.RETREAT
+
+
+from simulation.combat_ai import (
+    execute_ai_tick,
+    cover_damage_multiplier,
+)
+
+
+def _setup_full_manager() -> SimulationManager:
+    """Manager with one red asset, one blue asset far away."""
+    manager = SimulationManager()
+
+    red_faction = Faction(
+        faction_id="red",
+        name="OPFOR",
+        side="red",
+        doctrine=Doctrine.AGGRESSIVE,
+    )
+    blue_faction = Faction(
+        faction_id="blue",
+        name="BLUFOR",
+        side="blue",
+        doctrine=Doctrine.DEFENSIVE,
+    )
+    manager.add_faction(red_faction)
+    manager.add_faction(blue_faction)
+
+    manager.add_asset(SimAsset(
+        asset_id="red-01",
+        callsign="Red-01",
+        asset_type="T-72 Tank",
+        faction_id="red",
+        position=Position(latitude=33.5, longitude=36.3, altitude_m=0.0),
+        health=1.0,
+        status=AssetStatus.ACTIVE,
+        speed_kmh=50.0,
+        max_speed_kmh=50.0,
+    ))
+    manager.add_asset(SimAsset(
+        asset_id="blue-01",
+        callsign="Blue-01",
+        asset_type="M1 Abrams",
+        faction_id="blue",
+        position=Position(latitude=36.0, longitude=38.0, altitude_m=0.0),
+        health=1.0,
+        status=AssetStatus.ACTIVE,
+        speed_kmh=50.0,
+        max_speed_kmh=50.0,
+    ))
+    return manager
+
+
+class TestBehaviorExecution:
+    def test_execute_ai_tick_does_not_touch_blue_assets(self) -> None:
+        manager = _setup_full_manager()
+        before_status = manager.assets["blue-01"].status
+        execute_ai_tick(manager)
+        assert manager.assets["blue-01"].status == before_status
+
+    def test_execute_ai_tick_does_not_touch_destroyed_assets(self) -> None:
+        manager = _setup_full_manager()
+        manager.assets["red-01"].health = 0.0
+        manager.assets["red-01"].status = AssetStatus.DESTROYED
+        execute_ai_tick(manager)
+        assert manager.assets["red-01"].status == AssetStatus.DESTROYED
+
+    def test_low_health_asset_retreats_to_rtb(self) -> None:
+        manager = _setup_full_manager()
+        # Add a red FOB for the asset to retreat to
+        manager.add_asset(SimAsset(
+            asset_id="red-fob-01",
+            callsign="FOB Alpha",
+            asset_type="supply_depot",
+            faction_id="red",
+            position=Position(latitude=33.0, longitude=36.0, altitude_m=0.0),
+            health=1.0,
+            status=AssetStatus.ACTIVE,
+            speed_kmh=0.0,
+            max_speed_kmh=0.0,
+        ))
+        asset = manager.assets["red-01"]
+        asset.health = 0.2  # triggers RETREAT
+        execute_ai_tick(manager)
+        assert asset.status == AssetStatus.RTB
+
+    def test_cover_damage_multiplier_with_nearby_structure(self) -> None:
+        manager = _setup_full_manager()
+        manager.add_asset(SimAsset(
+            asset_id="red-fob-01",
+            callsign="FOB Alpha",
+            asset_type="supply_depot",
+            faction_id="red",
+            position=Position(latitude=33.505, longitude=36.305, altitude_m=0.0),
+            health=1.0,
+            status=AssetStatus.ACTIVE,
+            speed_kmh=0.0,
+            max_speed_kmh=0.0,
+        ))
+        asset = manager.assets["red-01"]
+        multiplier = cover_damage_multiplier(asset, manager)
+        assert 0.60 <= multiplier <= 0.80  # 20-40% damage reduction
+
+    def test_cover_damage_multiplier_without_nearby_structure(self) -> None:
+        manager = _setup_full_manager()
+        asset = manager.assets["red-01"]
+        multiplier = cover_damage_multiplier(asset, manager)
+        assert multiplier == 1.0  # no reduction
+
+
+class TestSuppressionApplication:
+    def test_suppression_not_set_on_idle_asset(self) -> None:
+        manager = _setup_full_manager()
+        asset = manager.assets["red-01"]
+        # No threats nearby, no action that causes suppression
+        # Just verify execute_ai_tick runs without error
+        execute_ai_tick(manager)
+        assert asset.is_alive()

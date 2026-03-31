@@ -261,3 +261,205 @@ def pick_action(asset: SimAsset, manager: SimulationManager) -> AIAction:
     """Return the highest-scoring action for this asset."""
     scores = score_actions(asset, manager)
     return max(scores, key=lambda s: s.score).action
+
+
+# ---------------------------------------------------------------------------
+# Cover bonus
+# ---------------------------------------------------------------------------
+
+import random as _random
+
+
+def cover_damage_multiplier(
+    asset: "SimAsset", manager: "SimulationManager"
+) -> float:
+    """
+    Return a damage multiplier for an asset.
+
+    Assets near friendly structures get 20-40% damage reduction (multiplier
+    between 0.60 and 0.80). Otherwise returns 1.0.
+    """
+    if _has_nearby_structure(asset, manager, radius_km=2.0):
+        return _random.uniform(0.60, 0.80)
+    return 1.0
+
+
+# ---------------------------------------------------------------------------
+# Behavior handlers
+# ---------------------------------------------------------------------------
+
+def _find_nearest_friendly_structure(
+    asset: "SimAsset", manager: "SimulationManager"
+) -> "SimAsset | None":
+    """Return the closest alive friendly structure asset, or None."""
+    my_faction = manager.factions.get(asset.faction_id)
+    if my_faction is None:
+        return None
+    nearest: "SimAsset | None" = None
+    best_dist = float("inf")
+    for other in manager.assets.values():
+        if not other.is_alive():
+            continue
+        if other.asset_id == asset.asset_id:
+            continue
+        other_faction = manager.factions.get(other.faction_id)
+        if other_faction is None or other_faction.side != my_faction.side:
+            continue
+        if not _is_structure(other.asset_type):
+            continue
+        dist = _haversine_km(
+            asset.position.latitude,
+            asset.position.longitude,
+            other.position.latitude,
+            other.position.longitude,
+        )
+        if dist < best_dist:
+            best_dist = dist
+            nearest = other
+    return nearest
+
+
+def _find_nearest_enemy(
+    asset: "SimAsset", manager: "SimulationManager"
+) -> "SimAsset | None":
+    """Return the closest alive enemy asset, or None."""
+    my_faction = manager.factions.get(asset.faction_id)
+    if my_faction is None:
+        return None
+    nearest: "SimAsset | None" = None
+    best_dist = float("inf")
+    for other in manager.assets.values():
+        if not other.is_alive():
+            continue
+        other_faction = manager.factions.get(other.faction_id)
+        if other_faction is None:
+            continue
+        if other_faction.side == my_faction.side:
+            continue
+        dist = _haversine_km(
+            asset.position.latitude,
+            asset.position.longitude,
+            other.position.latitude,
+            other.position.longitude,
+        )
+        if dist < best_dist:
+            best_dist = dist
+            nearest = other
+    return nearest
+
+
+_SUPPRESSION_DURATION_TICKS = 5
+
+
+def _execute_retreat(asset: "SimAsset", manager: "SimulationManager") -> None:
+    """Move asset toward nearest friendly structure (FOB). Set status RTB."""
+    from .assets import AssetStatus
+    target = _find_nearest_friendly_structure(asset, manager)
+    if target is None:
+        return
+    try:
+        manager.command_move(
+            asset_id=asset.asset_id,
+            dest_lat=target.position.latitude,
+            dest_lon=target.position.longitude,
+            dest_alt=target.position.altitude_m,
+            terrain="open",
+        )
+    except Exception:
+        pass
+    asset.status = AssetStatus.RTB
+
+
+def _execute_seek_cover(asset: "SimAsset", manager: "SimulationManager") -> None:
+    """Move to nearest structure and apply suppression."""
+    target = _find_nearest_friendly_structure(asset, manager)
+    if target is not None:
+        try:
+            manager.command_move(
+                asset_id=asset.asset_id,
+                dest_lat=target.position.latitude,
+                dest_lon=target.position.longitude,
+                dest_alt=target.position.altitude_m,
+                terrain="open",
+            )
+        except Exception:
+            pass
+    asset.suppressed_until_tick = manager.tick + _SUPPRESSION_DURATION_TICKS
+
+
+def _execute_call_support(asset: "SimAsset", manager: "SimulationManager") -> None:
+    """Broadcast a contact event so nearby friendlies converge."""
+    from .events import EventType, Mutation
+    manager.event_queue.create_and_schedule(
+        event_type=EventType.ALERT,
+        description=(
+            f"{asset.callsign} requests support at "
+            f"({asset.position.latitude:.3f}, {asset.position.longitude:.3f})"
+        ),
+        faction_id=asset.faction_id,
+        scheduled_tick=manager.tick,
+        probability=1.0,
+        mutations=[
+            Mutation(
+                action="converge_allies",
+                params={
+                    "rally_lat": asset.position.latitude,
+                    "rally_lon": asset.position.longitude,
+                    "faction_id": asset.faction_id,
+                    "radius_km": 15.0,
+                },
+            )
+        ],
+    )
+
+
+def _execute_advance(asset: "SimAsset", manager: "SimulationManager") -> None:
+    """Move toward the nearest enemy."""
+    target = _find_nearest_enemy(asset, manager)
+    if target is None:
+        return
+    try:
+        manager.command_move(
+            asset_id=asset.asset_id,
+            dest_lat=target.position.latitude,
+            dest_lon=target.position.longitude,
+            dest_alt=target.position.altitude_m,
+            terrain="open",
+        )
+    except Exception:
+        pass
+
+
+def execute_action(
+    asset: "SimAsset", action: AIAction, manager: "SimulationManager"
+) -> None:
+    """Dispatch to the correct behavior handler."""
+    if action == AIAction.RETREAT:
+        _execute_retreat(asset, manager)
+    elif action == AIAction.SEEK_COVER:
+        _execute_seek_cover(asset, manager)
+    elif action == AIAction.CALL_SUPPORT:
+        _execute_call_support(asset, manager)
+    elif action == AIAction.ADVANCE:
+        _execute_advance(asset, manager)
+    # HOLD and ENGAGE: no movement commanded — asset stays
+
+
+# ---------------------------------------------------------------------------
+# AI tick entry point
+# ---------------------------------------------------------------------------
+
+def execute_ai_tick(manager: "SimulationManager") -> None:
+    """
+    Run one AI decision cycle for all non-blue-faction alive assets.
+
+    Called once per simulation tick after movement processing.
+    """
+    for asset in list(manager.assets.values()):
+        if not asset.is_alive():
+            continue
+        faction = manager.factions.get(asset.faction_id)
+        if faction is None or faction.side == "blue":
+            continue
+        action = pick_action(asset, manager)
+        execute_action(asset, action, manager)
