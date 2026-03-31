@@ -9,7 +9,7 @@ from typing import Any
 
 from simulation.assets import AssetStatus, Position, SimAsset
 from simulation.detection import sensor_range_for
-from simulation.faction import Doctrine, Faction, Leader, Resources
+from simulation.faction import Doctrine, Faction, Leader, PatrolZone, Resources
 from simulation.manager import SimulationManager
 from simulation.rules import DependencyLink
 
@@ -60,6 +60,13 @@ def _add_factions(mgr: SimulationManager) -> None:
         ],
         retaliation_threshold=0.3,
         resources=Resources(fuel=0.8, ammo=0.9, manpower=0.7),
+        patrol_zone=PatrolZone(
+            min_lat=33.0, max_lat=36.0, min_lon=36.0, max_lon=42.0,
+            waypoints=[
+                (33.5, 36.5), (34.2, 37.8), (35.0, 39.0),
+                (34.5, 40.5), (33.8, 41.0), (33.2, 39.5),
+            ],
+        ),
     ))
 
     mgr.add_faction(Faction(
@@ -72,6 +79,13 @@ def _add_factions(mgr: SimulationManager) -> None:
         ],
         retaliation_threshold=0.1,
         resources=Resources(fuel=0.4, ammo=0.6, manpower=0.5),
+        patrol_zone=PatrolZone(
+            min_lat=33.0, max_lat=35.0, min_lon=38.0, max_lon=43.0,
+            waypoints=[
+                (33.4, 38.5), (34.0, 40.0), (34.5, 41.5),
+                (34.0, 42.5), (33.2, 41.0),
+            ],
+        ),
     ))
 
     mgr.add_faction(Faction(
@@ -84,6 +98,13 @@ def _add_factions(mgr: SimulationManager) -> None:
         ],
         retaliation_threshold=0.25,
         resources=Resources(fuel=0.6, ammo=0.7, manpower=0.6),
+        patrol_zone=PatrolZone(
+            min_lat=32.0, max_lat=34.0, min_lon=44.0, max_lon=48.0,
+            waypoints=[
+                (32.5, 44.5), (33.0, 46.0), (33.5, 47.5),
+                (33.0, 47.0), (32.5, 46.0),
+            ],
+        ),
     ))
 
     mgr.add_faction(Faction(
