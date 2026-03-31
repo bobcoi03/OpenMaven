@@ -77,3 +77,156 @@ class TestPatrolZone:
         )
         assert zone.next_waypoint(current_index=0) == (34.0, 37.0)
         assert zone.next_waypoint(current_index=1) == (33.5, 36.5)  # wraps
+
+
+from simulation.combat_ai import (
+    AIAction,
+    ActionScore,
+    score_actions,
+    pick_action,
+)
+from simulation.manager import SimulationManager
+from simulation.faction import Faction, Doctrine, PatrolZone
+from simulation.assets import SimAsset, AssetStatus, Position
+from simulation.events import EventQueue
+
+
+def _setup_scoring_manager() -> SimulationManager:
+    """Minimal manager with one red asset and no nearby threats."""
+    manager = SimulationManager()
+
+    red_faction = Faction(
+        faction_id="red",
+        name="OPFOR",
+        side="red",
+        doctrine=Doctrine.AGGRESSIVE,
+    )
+    manager.add_faction(red_faction)
+
+    blue_faction = Faction(
+        faction_id="blue",
+        name="BLUFOR",
+        side="blue",
+        doctrine=Doctrine.DEFENSIVE,
+    )
+    manager.add_faction(blue_faction)
+
+    red_asset = SimAsset(
+        asset_id="red-01",
+        callsign="Red-01",
+        asset_type="T-72 Tank",
+        faction_id="red",
+        position=Position(latitude=33.5, longitude=36.3, altitude_m=0.0),
+        health=1.0,
+        status=AssetStatus.ACTIVE,
+        speed_kmh=50.0,
+        max_speed_kmh=50.0,
+    )
+    manager.add_asset(red_asset)
+    return manager
+
+
+class TestScoringSystem:
+    def test_score_actions_returns_all_six_actions(self) -> None:
+        manager = _setup_scoring_manager()
+        asset = manager.assets["red-01"]
+        scores = score_actions(asset, manager)
+        actions = {s.action for s in scores}
+        assert actions == {
+            AIAction.HOLD,
+            AIAction.ENGAGE,
+            AIAction.RETREAT,
+            AIAction.SEEK_COVER,
+            AIAction.CALL_SUPPORT,
+            AIAction.ADVANCE,
+        }
+
+    def test_low_health_prefers_retreat_over_engage(self) -> None:
+        manager = _setup_scoring_manager()
+        asset = manager.assets["red-01"]
+        asset.health = 0.2  # below 0.3 threshold
+        scores = score_actions(asset, manager)
+        scores_dict = {s.action: s.score for s in scores}
+        assert scores_dict[AIAction.RETREAT] > scores_dict[AIAction.ENGAGE]
+
+    def test_healthy_asset_does_not_prefer_retreat(self) -> None:
+        manager = _setup_scoring_manager()
+        asset = manager.assets["red-01"]
+        asset.health = 0.9
+        scores = score_actions(asset, manager)
+        scores_dict = {s.action: s.score for s in scores}
+        assert scores_dict[AIAction.ENGAGE] > scores_dict[AIAction.RETREAT]
+
+    def test_outnumbered_boosts_call_support(self) -> None:
+        manager = _setup_scoring_manager()
+        # Add 4 blue threats within 10km
+        for i in range(4):
+            manager.add_asset(SimAsset(
+                asset_id=f"blue-threat-{i}",
+                callsign=f"Blue-{i}",
+                asset_type="M1 Abrams",
+                faction_id="blue",
+                position=Position(latitude=33.51, longitude=36.31, altitude_m=0.0),
+                health=1.0,
+                status=AssetStatus.ACTIVE,
+                speed_kmh=50.0,
+                max_speed_kmh=50.0,
+            ))
+        asset = manager.assets["red-01"]
+        scores = score_actions(asset, manager)
+        scores_dict = {s.action: s.score for s in scores}
+        assert scores_dict[AIAction.CALL_SUPPORT] > scores_dict[AIAction.HOLD]
+
+    def test_aggressive_doctrine_boosts_engage_vs_defensive(self) -> None:
+        manager = _setup_scoring_manager()
+        asset = manager.assets["red-01"]
+        asset.health = 0.9
+
+        manager.factions["red"].doctrine = Doctrine.AGGRESSIVE
+        agg_scores = {s.action: s.score for s in score_actions(asset, manager)}
+
+        manager.factions["red"].doctrine = Doctrine.DEFENSIVE
+        def_scores = {s.action: s.score for s in score_actions(asset, manager)}
+
+        assert agg_scores[AIAction.ENGAGE] > def_scores[AIAction.ENGAGE]
+        assert agg_scores[AIAction.ADVANCE] > def_scores[AIAction.ADVANCE]
+
+    def test_defensive_doctrine_boosts_hold_vs_aggressive(self) -> None:
+        manager = _setup_scoring_manager()
+        asset = manager.assets["red-01"]
+        asset.health = 0.9
+
+        manager.factions["red"].doctrine = Doctrine.DEFENSIVE
+        def_scores = {s.action: s.score for s in score_actions(asset, manager)}
+
+        manager.factions["red"].doctrine = Doctrine.AGGRESSIVE
+        agg_scores = {s.action: s.score for s in score_actions(asset, manager)}
+
+        assert def_scores[AIAction.HOLD] > agg_scores[AIAction.HOLD]
+
+    def test_nearby_structure_boosts_seek_cover(self) -> None:
+        manager = _setup_scoring_manager()
+        # Add a supply_depot for red faction within 2km
+        manager.add_asset(SimAsset(
+            asset_id="red-depot-01",
+            callsign="Supply Depot Alpha",
+            asset_type="supply_depot",
+            faction_id="red",
+            position=Position(latitude=33.505, longitude=36.305, altitude_m=0.0),
+            health=1.0,
+            status=AssetStatus.ACTIVE,
+            speed_kmh=0.0,
+            max_speed_kmh=0.0,
+        ))
+        asset = manager.assets["red-01"]
+        asset.health = 0.5  # moderate damage — cover is relevant
+        scores = score_actions(asset, manager)
+        scores_dict = {s.action: s.score for s in scores}
+        assert scores_dict[AIAction.SEEK_COVER] > scores_dict[AIAction.HOLD]
+
+    def test_pick_action_returns_highest_scoring_action(self) -> None:
+        manager = _setup_scoring_manager()
+        asset = manager.assets["red-01"]
+        asset.health = 0.1  # very low — retreat should win
+        action = pick_action(asset, manager)
+        assert action == AIAction.RETREAT
