@@ -13,6 +13,8 @@ from detection.detection_engine import process_assets
 from detection.models import Asset as DetectionAsset, Detection, Target, TargetStage, TargetingBoard
 from detection.targeting_board import advance_target, auto_triage, create_target, set_target_stage
 from simulation.assets import AssetStatus, MovementOrder, Position, SimAsset
+from simulation.combat_ai import execute_ai_tick, cover_damage_multiplier
+from simulation.consequence_engine import ConsequenceEngine
 from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
 from simulation.detection import SensorReading, compute_detections
@@ -172,6 +174,7 @@ class SimulationManager:
 
         self._task: asyncio.Task[None] | None = None
         self._broadcast_fn: Any = None  # set externally by WebSocket manager
+        self._consequence_engine: ConsequenceEngine = ConsequenceEngine()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -308,7 +311,8 @@ class SimulationManager:
         if result is None:
             return {"error": f"Unknown weapon: {weapon_id}"}
 
-        target.apply_damage(result.damage_percent)
+        damage_to_apply = result.damage_percent * cover_damage_multiplier(target, self)
+        target.apply_damage(damage_to_apply)
         self._update_faction_capability(target.faction_id)
 
         if result.destroyed:
@@ -524,7 +528,8 @@ class SimulationManager:
             _finish_mission()
             return
 
-        target.apply_damage(result.damage_percent)
+        damage_to_apply = result.damage_percent * cover_damage_multiplier(target, self)
+        target.apply_damage(damage_to_apply)
         self._update_faction_capability(target.faction_id)
 
         if result.destroyed:
@@ -715,14 +720,30 @@ class SimulationManager:
             if update:
                 asset_updates.append(update)
 
+        # --- AI tick (hostile factions decide and act) ---
+        execute_ai_tick(self)
+
         # 2. Fire due events
         due_events = self.event_queue.pop_due_events(self.tick)
         events_fired = []
+        fired_sim_events: list[SimEvent] = []
         for event in due_events:
             fired = self._resolve_event(event)
             if fired:
                 events_fired.append(event.model_dump())
+                fired_sim_events.append(event)
                 self.event_log.append(event)
+
+        # Fire consequence engine for significant events (non-blocking)
+        for fired_event in fired_sim_events:
+            if fired_event.faction_id:
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(
+                        self._consequence_engine.process_event(fired_event, self)
+                    )
+                except RuntimeError:
+                    pass  # No running event loop (e.g., in tests)
 
         # 3. Fog of war — run detection
         detection_entries, ghost_entries = self._tick_detections()
@@ -787,9 +808,13 @@ class SimulationManager:
             }
 
         # In transit — interpolate
+        # Suppression: extend arrival by 1 tick each suppressed tick (net ~0.5x speed)
+        if asset.is_suppressed(self.tick) and asset.movement_order:
+            asset.movement_order.arrive_tick += 1
+
         total_ticks = order.arrive_tick - order.start_tick
         elapsed = self.tick - order.start_tick
-        fraction = elapsed / total_ticks
+        fraction = min(elapsed / total_ticks, 1.0)
 
         lat, lon = interpolate_position(
             order.origin_lat, order.origin_lon,
@@ -860,6 +885,39 @@ class SimulationManager:
             if asset_data:
                 new_asset = SimAsset(**asset_data)
                 self.add_asset(new_asset)
+
+        elif action == "converge_allies":
+            rally_lat: float = params.get("rally_lat", 0.0)
+            rally_lon: float = params.get("rally_lon", 0.0)
+            faction_id: str = params.get("faction_id", "")
+            radius_km: float = params.get("radius_km", 15.0)
+            faction = self.factions.get(faction_id)
+            if faction is None:
+                return
+            for asset in self.assets.values():
+                if not asset.is_alive():
+                    continue
+                if asset.faction_id != faction_id:
+                    continue
+                if asset.status in (AssetStatus.RTB, AssetStatus.DESTROYED):
+                    continue
+                # Only move assets within radius_km of rally point
+                from simulation.combat_ai import _haversine_km
+                dist = _haversine_km(
+                    asset.position.latitude, asset.position.longitude,
+                    rally_lat, rally_lon
+                )
+                if dist <= radius_km:
+                    try:
+                        self.command_move(
+                            asset_id=asset.asset_id,
+                            dest_lat=rally_lat,
+                            dest_lon=rally_lon,
+                            dest_alt=asset.position.altitude_m,
+                            terrain="open",
+                        )
+                    except Exception:
+                        pass
 
         else:
             logger.warning("Unknown mutation action: %s", action)

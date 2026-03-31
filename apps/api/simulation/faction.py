@@ -1,8 +1,28 @@
 """Faction model — doctrine, leadership, capability, morale."""
 
+from dataclasses import dataclass, field
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+@dataclass
+class PatrolZone:
+    """Rectangular patrol area for a faction with cycling waypoints."""
+
+    min_lat: float
+    max_lat: float
+    min_lon: float
+    max_lon: float
+    waypoints: list[tuple[float, float]] = field(default_factory=list)
+
+    def next_waypoint(self, current_index: int) -> tuple[float, float]:
+        """Return the waypoint after current_index, wrapping around."""
+        if not self.waypoints:
+            centre_lat = (self.min_lat + self.max_lat) / 2
+            centre_lon = (self.min_lon + self.max_lon) / 2
+            return (centre_lat, centre_lon)
+        return self.waypoints[(current_index + 1) % len(self.waypoints)]
 
 
 class Doctrine(str, Enum):
@@ -34,6 +54,8 @@ class Resources(BaseModel):
 class Faction(BaseModel):
     """A faction in the simulation."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     faction_id: str
     name: str
     side: str  # "blue", "red", "neutral", "civilian"
@@ -45,6 +67,7 @@ class Faction(BaseModel):
     resources: Resources = Field(default_factory=Resources)
     retaliation_threshold: float = 0.3  # capability loss % that triggers retaliation
     asset_ids: list[str] = Field(default_factory=list)
+    patrol_zone: PatrolZone | None = None
 
     def current_leader(self) -> Leader | None:
         """Return the first living leader in the succession chain."""
