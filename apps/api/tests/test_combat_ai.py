@@ -36,3 +36,44 @@ class TestSuppressionField:
         asset.suppressed_until_tick = 10
         assert asset.is_suppressed(current_tick=10) is False
         assert asset.is_suppressed(current_tick=11) is False
+
+
+from simulation.faction import Faction, Doctrine, PatrolZone
+
+
+class TestPatrolZone:
+    def test_patrol_zone_default_is_none(self) -> None:
+        faction = Faction(
+            faction_id="red",
+            name="OPFOR",
+            side="red",
+            doctrine=Doctrine.AGGRESSIVE,
+        )
+        assert faction.patrol_zone is None
+
+    def test_patrol_zone_can_be_assigned(self) -> None:
+        zone = PatrolZone(
+            min_lat=33.0,
+            max_lat=35.0,
+            min_lon=36.0,
+            max_lon=38.0,
+            waypoints=[(33.5, 36.5), (34.0, 37.0), (34.5, 36.8)],
+        )
+        faction = Faction(
+            faction_id="red",
+            name="OPFOR",
+            side="red",
+            doctrine=Doctrine.AGGRESSIVE,
+            patrol_zone=zone,
+        )
+        assert faction.patrol_zone is not None
+        assert faction.patrol_zone.min_lat == 33.0
+        assert len(faction.patrol_zone.waypoints) == 3
+
+    def test_patrol_zone_next_waypoint_cycles(self) -> None:
+        zone = PatrolZone(
+            min_lat=33.0, max_lat=35.0, min_lon=36.0, max_lon=38.0,
+            waypoints=[(33.5, 36.5), (34.0, 37.0)],
+        )
+        assert zone.next_waypoint(current_index=0) == (34.0, 37.0)
+        assert zone.next_waypoint(current_index=1) == (33.5, 36.5)  # wraps
