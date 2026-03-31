@@ -13,6 +13,7 @@ from detection.detection_engine import process_assets
 from detection.models import Asset as DetectionAsset, Detection, Target, TargetStage, TargetingBoard
 from detection.targeting_board import auto_triage, create_target
 from simulation.assets import AssetStatus, MovementOrder, Position, SimAsset
+from simulation.combat_ai import execute_ai_tick, cover_damage_multiplier
 from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
 from simulation.detection import SensorReading, compute_detections
@@ -308,7 +309,8 @@ class SimulationManager:
         if result is None:
             return {"error": f"Unknown weapon: {weapon_id}"}
 
-        target.apply_damage(result.damage_percent)
+        damage_to_apply = result.damage_percent * cover_damage_multiplier(target, self)
+        target.apply_damage(damage_to_apply)
         self._update_faction_capability(target.faction_id)
 
         if result.destroyed:
@@ -503,7 +505,8 @@ class SimulationManager:
             _finish_mission()
             return
 
-        target.apply_damage(result.damage_percent)
+        damage_to_apply = result.damage_percent * cover_damage_multiplier(target, self)
+        target.apply_damage(damage_to_apply)
         self._update_faction_capability(target.faction_id)
 
         if result.destroyed:
@@ -673,6 +676,9 @@ class SimulationManager:
             if update:
                 asset_updates.append(update)
 
+        # --- AI tick (hostile factions decide and act) ---
+        execute_ai_tick(self)
+
         # 2. Fire due events
         due_events = self.event_queue.pop_due_events(self.tick)
         events_fired = []
@@ -745,9 +751,16 @@ class SimulationManager:
             }
 
         # In transit — interpolate
+        effective_speed = asset.speed_kmh
+        if asset.is_suppressed(self.tick):
+            effective_speed *= 0.5
+
         total_ticks = order.arrive_tick - order.start_tick
         elapsed = self.tick - order.start_tick
-        fraction = elapsed / total_ticks
+        # effective_speed informs how far the asset has progressed this tick;
+        # fraction is scaled so suppressed assets move at half speed.
+        speed_ratio = effective_speed / asset.speed_kmh if asset.speed_kmh > 0 else 1.0
+        fraction = min((elapsed / total_ticks) * speed_ratio, 1.0)
 
         lat, lon = interpolate_position(
             order.origin_lat, order.origin_lon,

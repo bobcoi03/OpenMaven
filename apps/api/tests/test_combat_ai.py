@@ -347,3 +347,20 @@ class TestSuppressionApplication:
         # Just verify execute_ai_tick runs without error
         execute_ai_tick(manager)
         assert asset.is_alive()
+
+
+class TestManagerIntegration:
+    def test_execute_ai_tick_called_without_error_in_advance_tick(self) -> None:
+        """Advance tick runs without error when hostile assets are present."""
+        manager = _setup_full_manager()
+        # Should not raise
+        manager._advance_tick()
+        assert manager.tick == 1
+
+    def test_suppressed_asset_field_persists_through_tick(self) -> None:
+        manager = _setup_full_manager()
+        asset = manager.assets["red-01"]
+        asset.suppressed_until_tick = manager.tick + 10
+        manager._advance_tick()
+        # suppressed_until_tick should still be set after tick
+        assert asset.suppressed_until_tick > 0
