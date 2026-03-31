@@ -135,3 +135,19 @@ class TestCommandApplication:
             await engine.process_event(event, manager)
         assert manager.assets["red-01"].status == AssetStatus.HOLDING
         assert engine._last_call_tick.get("red") == manager.tick
+
+
+class TestManagerConsequenceIntegration:
+    def test_consequence_engine_instantiated_on_manager(self) -> None:
+        """Manager has a consequence engine instance."""
+        manager = _make_manager()
+        from simulation.consequence_engine import ConsequenceEngine
+        assert hasattr(manager, "_consequence_engine")
+        assert isinstance(manager._consequence_engine, ConsequenceEngine)
+
+    def test_advance_tick_does_not_crash_with_consequence_engine(self) -> None:
+        """_advance_tick() runs without error when consequence engine is hooked in."""
+        manager = _make_manager()
+        # Should not raise
+        manager._advance_tick()
+        assert manager.tick == 1

@@ -14,6 +14,7 @@ from detection.models import Asset as DetectionAsset, Detection, Target, TargetS
 from detection.targeting_board import auto_triage, create_target
 from simulation.assets import AssetStatus, MovementOrder, Position, SimAsset
 from simulation.combat_ai import execute_ai_tick, cover_damage_multiplier
+from simulation.consequence_engine import ConsequenceEngine
 from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
 from simulation.detection import SensorReading, compute_detections
@@ -173,6 +174,7 @@ class SimulationManager:
 
         self._task: asyncio.Task[None] | None = None
         self._broadcast_fn: Any = None  # set externally by WebSocket manager
+        self._consequence_engine: ConsequenceEngine = ConsequenceEngine()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -682,11 +684,24 @@ class SimulationManager:
         # 2. Fire due events
         due_events = self.event_queue.pop_due_events(self.tick)
         events_fired = []
+        fired_sim_events: list[SimEvent] = []
         for event in due_events:
             fired = self._resolve_event(event)
             if fired:
                 events_fired.append(event.model_dump())
+                fired_sim_events.append(event)
                 self.event_log.append(event)
+
+        # Fire consequence engine for significant events (non-blocking)
+        for fired_event in fired_sim_events:
+            if fired_event.faction_id:
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(
+                        self._consequence_engine.process_event(fired_event, self)
+                    )
+                except RuntimeError:
+                    pass  # No running event loop (e.g., in tests)
 
         # 3. Fog of war — run detection
         detection_entries, ghost_entries = self._tick_detections()
