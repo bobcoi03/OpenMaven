@@ -766,16 +766,13 @@ class SimulationManager:
             }
 
         # In transit — interpolate
-        effective_speed = asset.speed_kmh
-        if asset.is_suppressed(self.tick):
-            effective_speed *= 0.5
+        # Suppression: extend arrival by 1 tick each suppressed tick (net ~0.5x speed)
+        if asset.is_suppressed(self.tick) and asset.movement_order:
+            asset.movement_order.arrive_tick += 1
 
         total_ticks = order.arrive_tick - order.start_tick
         elapsed = self.tick - order.start_tick
-        # effective_speed informs how far the asset has progressed this tick;
-        # fraction is scaled so suppressed assets move at half speed.
-        speed_ratio = effective_speed / asset.speed_kmh if asset.speed_kmh > 0 else 1.0
-        fraction = min((elapsed / total_ticks) * speed_ratio, 1.0)
+        fraction = min(elapsed / total_ticks, 1.0)
 
         lat, lon = interpolate_position(
             order.origin_lat, order.origin_lon,
@@ -846,6 +843,39 @@ class SimulationManager:
             if asset_data:
                 new_asset = SimAsset(**asset_data)
                 self.add_asset(new_asset)
+
+        elif action == "converge_allies":
+            rally_lat: float = params.get("rally_lat", 0.0)
+            rally_lon: float = params.get("rally_lon", 0.0)
+            faction_id: str = params.get("faction_id", "")
+            radius_km: float = params.get("radius_km", 15.0)
+            faction = self.factions.get(faction_id)
+            if faction is None:
+                return
+            for asset in self.assets.values():
+                if not asset.is_alive():
+                    continue
+                if asset.faction_id != faction_id:
+                    continue
+                if asset.status in (AssetStatus.RTB, AssetStatus.DESTROYED):
+                    continue
+                # Only move assets within radius_km of rally point
+                from simulation.combat_ai import _haversine_km
+                dist = _haversine_km(
+                    asset.position.latitude, asset.position.longitude,
+                    rally_lat, rally_lon
+                )
+                if dist <= radius_km:
+                    try:
+                        self.command_move(
+                            asset_id=asset.asset_id,
+                            dest_lat=rally_lat,
+                            dest_lon=rally_lon,
+                            dest_alt=asset.position.altitude_m,
+                            terrain="open",
+                        )
+                    except Exception:
+                        pass
 
         else:
             logger.warning("Unknown mutation action: %s", action)

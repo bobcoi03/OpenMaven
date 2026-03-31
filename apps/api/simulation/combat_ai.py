@@ -7,6 +7,7 @@ No behavior trees — pure utility scoring for debuggability.
 from __future__ import annotations
 
 import math
+import random as _random
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -266,8 +267,6 @@ def pick_action(asset: SimAsset, manager: SimulationManager) -> AIAction:
 # ---------------------------------------------------------------------------
 # Cover bonus
 # ---------------------------------------------------------------------------
-
-import random as _random
 
 
 def cover_damage_multiplier(
