@@ -17,6 +17,7 @@ import {
   useMapMovePreview,
   useMapLines,
   useMapSensorCircles,
+  useMapTargetLock,
   MAP_STYLES,
   type MapStyleId,
 } from "@/lib/map";
@@ -50,6 +51,7 @@ interface TacticalMapProps {
   strikeLines?: Array<{ from: [number, number]; to: [number, number] }>;
   plannedLines?: Array<{ from: [number, number]; to: [number, number] }> | null;
   movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
+  lockedAssetId?: string | null;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -72,6 +74,7 @@ export function MapViewInner({
   strikeLines,
   plannedLines,
   movementLines,
+  lockedAssetId,
 }: TacticalMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -111,6 +114,11 @@ export function MapViewInner({
   useMapSensorCircles(mapRef, containerRef, {
     sensorRanges,
     showSensorRanges,
+  });
+
+  useMapTargetLock(mapRef, containerRef, {
+    lockedAssetId,
+    assets,
   });
 
   return (
