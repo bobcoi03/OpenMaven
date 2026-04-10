@@ -52,6 +52,7 @@ interface TacticalMapProps {
   plannedLines?: Array<{ from: [number, number]; to: [number, number] }> | null;
   movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
   lockedAssetId?: string | null;
+  flyTo?: { lat: number; lng: number; zoom?: number } | null;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -75,6 +76,7 @@ export function MapViewInner({
   plannedLines,
   movementLines,
   lockedAssetId,
+  flyTo,
 }: TacticalMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -84,6 +86,7 @@ export function MapViewInner({
       ? (e) => onContextMenu({ type: "map", lngLat: { lng: e.lng, lat: e.lat }, x: e.x, y: e.y })
       : undefined,
     onClick: onMapClick,
+    flyTo,
   });
 
   const markersRef = useMapMarkers(mapRef, {

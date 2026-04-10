@@ -13,16 +13,16 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from openai import OpenAI
 from pydantic import BaseModel
 
+from dependencies import get_llm_client, LLM_MODEL
 from simulation.profiles import WEAPON_PROFILES, get_strike_profile
 from simulation.rules import haversine_km
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-MODEL = "gpt-5.4-mini"
+MODEL = LLM_MODEL
 MAX_AGENT_STEPS = 30
 
 
@@ -386,6 +386,93 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_detected_contacts",
+            "description": (
+                "Get all hostile assets currently detected by friendly sensors. "
+                "Returns target_id, confidence (0-1), detecting sensor asset, "
+                "and live lat/lon. This is the fog-of-war view — only shows "
+                "what our sensors can actually see right now."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_ghost_contacts",
+            "description": (
+                "Get lost contacts — hostile assets previously detected but no "
+                "longer in sensor range. Returns last-known position, tick when "
+                "contact was lost, and confidence at loss. Ghosts expire after "
+                "60 ticks. Use this to identify sensor gaps or plan search missions."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_weapon_effectiveness",
+            "description": (
+                "Look up hit probability, kill probability, and damage stats for "
+                "a weapon against a target type — without needing a specific attacker. "
+                "Use this to quickly compare weapons or assess if a weapon class "
+                "can defeat a target category."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "weapon_id": {
+                        "type": "string",
+                        "description": (
+                            "Weapon ID (e.g. 'hellfire', 'gbu_38_jdam', 'javelin'). "
+                            "Use get_force_disposition to see available weapons."
+                        ),
+                    },
+                    "target_type": {
+                        "type": "string",
+                        "description": (
+                            "Asset type of the target (e.g. 'T-72A MBT', 'Su-35S Flanker-E'). "
+                            "Must match an asset_type from the simulation."
+                        ),
+                    },
+                },
+                "required": ["weapon_id", "target_type"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate_travel_time",
+            "description": (
+                "Calculate how long it takes an asset to reach a destination. "
+                "Returns distance, ETA in ticks, bearing, and effective speed. "
+                "Does NOT issue a move order — just a planning calculation."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "asset_id": {
+                        "type": "string",
+                        "description": "Asset ID or callsign of the asset to calculate for.",
+                    },
+                    "dest_lat": {
+                        "type": "number",
+                        "description": "Destination latitude.",
+                    },
+                    "dest_lon": {
+                        "type": "number",
+                        "description": "Destination longitude.",
+                    },
+                },
+                "required": ["asset_id", "dest_lat", "dest_lon"],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """\
@@ -413,12 +500,22 @@ Do NOT use 'blufor' or 'opfor' as faction IDs. Call list_factions if uncertain.
 When the operator says "BLUFOR", use faction_id 'blue'.
 When the operator says "OPFOR", "enemy", or "hostile", use faction_id 'red'.
 
+Asset mobility:
+- Some assets are STATIONARY (speed_kmh=0, can_move=false): HIMARS, howitzers, SAM sites.
+  Stationary assets CANNOT use launch_strike_mission (which requires flying to the target).
+  Use execute_strike for stationary assets (instant strike, no travel).
+- Mobile assets (speed_kmh>0, can_move=true): aircraft, vehicles, ships.
+  These can use launch_strike_mission to fly to the target.
+- Always check can_move before choosing strike method.
+- Only use weapons that appear in the shooter's weapons list. Never guess weapon IDs.
+
 Strike workflow (single target):
 1. When the operator requests a strike, call plan_strike(attacker_id, target_id).
 2. Present weapon options and your recommendation briefly.
-3. Use launch_strike_mission (realistic travel) or execute_strike (instant).
+3. If attacker can_move=true: use launch_strike_mission (realistic travel).
+   If attacker can_move=false: use execute_strike (instant, for stationary assets).
 4. If the operator says "kill" or "destroy" a target, treat that as a strike request.
-5. If only a target is specified, pick the nearest friendly asset with weapons as attacker.
+5. If only a target is specified, pick the nearest friendly MOBILE asset with weapons as attacker.
 
 Multi-target strike workflow:
 1. When the operator says "strike all targets", "kill everything", "coordinate strikes",
@@ -439,8 +536,24 @@ Coordination principles:
   (SAMs, C2 nodes, artillery) over soft targets (trucks, infantry).
 - Report which targets cannot be engaged due to lack of available shooters.
 
+Situational awareness (fog of war):
+- Use get_detected_contacts to see what our sensors currently track. This is the TRUE
+  picture — only these hostiles are confirmed visible. Other assets may exist but be
+  outside sensor range.
+- Use get_ghost_contacts to see lost contacts (last-known positions of hostiles that
+  dropped off sensors). Ghosts expire after 60 ticks.
+- When planning strikes, prefer targets with HIGH detection confidence (>0.7).
+  Low-confidence contacts may have inaccurate positions.
+
+Pre-strike analysis:
+- Use query_weapon_effectiveness(weapon_id, target_type) to quickly check if a weapon
+  can kill a target type without needing a specific attacker asset.
+- Use calculate_travel_time(asset_id, dest_lat, dest_lon) to estimate ETA before
+  committing to a mission. This does NOT issue a move order.
+
 Guidelines:
 - Start with get_battlefield_summary to orient yourself.
+- Use get_detected_contacts for the fog-of-war picture before planning strikes.
 - Use find_assets for fuzzy lookups (e.g. "find the F-16", "where are tanks").
 - Be concise and tactical. Use callsigns, not asset IDs, when talking to the operator.
 - Report positions as lat/lon rounded to 2 decimal places.
@@ -545,6 +658,8 @@ def handle_force_disposition(faction_id: str) -> str:
             "health": asset.health,
             "lat": round(asset.position.latitude, 2),
             "lon": round(asset.position.longitude, 2),
+            "speed_kmh": asset.max_speed_kmh or asset.speed_kmh,
+            "can_move": (asset.max_speed_kmh or asset.speed_kmh) > 0,
             "weapons": asset.weapons,
         }
         by_type.setdefault(asset.asset_type, []).append(entry)
@@ -580,6 +695,8 @@ def handle_find_assets(query: str, faction_id: str | None = None, status: str | 
                 "health": asset.health,
                 "lat": round(asset.position.latitude, 2),
                 "lon": round(asset.position.longitude, 2),
+                "speed_kmh": asset.max_speed_kmh or asset.speed_kmh,
+                "can_move": (asset.max_speed_kmh or asset.speed_kmh) > 0,
                 "weapons": asset.weapons,
             })
 
@@ -605,6 +722,8 @@ def handle_assets_near(lat: float, lon: float, radius_km: float = 50) -> str:
                 "distance_km": round(dist, 1),
                 "lat": round(asset.position.latitude, 4),
                 "lon": round(asset.position.longitude, 4),
+                "speed_kmh": asset.max_speed_kmh or asset.speed_kmh,
+                "can_move": (asset.max_speed_kmh or asset.speed_kmh) > 0,
                 "weapons": asset.weapons,
             }
             results.setdefault(asset.faction_id, []).append(entry)
@@ -688,6 +807,7 @@ def handle_plan_strike(attacker_id: str, target_id: str) -> str:
             best_score = effectiveness
             best_weapon = weapon_id
 
+    attacker_speed = attacker.max_speed_kmh or attacker.speed_kmh
     return json.dumps({
         "attacker": {
             "asset_id": attacker.asset_id,
@@ -695,6 +815,8 @@ def handle_plan_strike(attacker_id: str, target_id: str) -> str:
             "asset_type": attacker.asset_type,
             "lat": round(attacker.position.latitude, 2),
             "lon": round(attacker.position.longitude, 2),
+            "speed_kmh": attacker_speed,
+            "can_move": attacker_speed > 0,
         },
         "target": {
             "asset_id": target.asset_id,
@@ -737,6 +859,20 @@ def handle_launch_strike_mission(shooter_id: str, weapon_id: str, target_id: str
     shooter = _resolve_asset(sim, shooter_id)
     if shooter is None:
         return json.dumps({"error": f"Shooter '{shooter_id}' not found."})
+
+    shooter_speed = shooter.max_speed_kmh or shooter.speed_kmh
+    if shooter_speed <= 0:
+        return json.dumps({
+            "error": f"{shooter.callsign} cannot move (stationary asset, speed=0). "
+            f"Use execute_strike for instant strike or pick a mobile shooter.",
+        })
+
+    if weapon_id not in shooter.weapons:
+        return json.dumps({
+            "error": f"{shooter.callsign} does not have weapon '{weapon_id}'. "
+            f"Available weapons: {shooter.weapons}",
+        })
+
     target = _resolve_asset(sim, target_id)
     if target is None:
         return json.dumps({"error": f"Target '{target_id}' not found."})
@@ -840,6 +976,7 @@ def handle_plan_multi_strike(
             and asset.is_alive()
             and asset.weapons
             and asset.asset_id not in on_mission_ids
+            and (asset.max_speed_kmh or asset.speed_kmh) > 0
         ):
             shooters.append(asset)
 
@@ -921,6 +1058,149 @@ def handle_plan_multi_strike(
     }, indent=2)
 
 
+def handle_get_detected_contacts() -> str:
+    """Return all hostile assets currently detected by friendly sensors."""
+    sim = _get_sim()
+    contacts = []
+    for target_id, reading in sim._detected.items():
+        target = sim.assets.get(target_id)
+        sensor = sim.assets.get(reading.sensor_asset_id)
+        contacts.append({
+            "target_id": target_id,
+            "target_callsign": target.callsign if target else "?",
+            "target_type": target.asset_type if target else "?",
+            "target_health": target.health if target else 0,
+            "confidence": round(reading.confidence, 3),
+            "lat": round(reading.lat, 4),
+            "lon": round(reading.lon, 4),
+            "detected_by": {
+                "asset_id": reading.sensor_asset_id,
+                "callsign": sensor.callsign if sensor else "?",
+                "sensor_type": sensor.sensor_type if sensor else "?",
+            },
+        })
+    contacts.sort(key=lambda c: c["confidence"], reverse=True)
+    return json.dumps({
+        "contacts": contacts,
+        "total_detected": len(contacts),
+        "current_tick": sim.tick,
+    }, indent=2)
+
+
+def handle_get_ghost_contacts() -> str:
+    """Return lost contacts — previously detected hostiles no longer in sensor range."""
+    sim = _get_sim()
+    ghosts = []
+    for target_id, ghost in sim._ghosts.items():
+        target = sim.assets.get(target_id)
+        ticks_since_lost = sim.tick - ghost.last_seen_tick
+        ghosts.append({
+            "target_id": target_id,
+            "target_callsign": target.callsign if target else "?",
+            "target_type": target.asset_type if target else "?",
+            "last_lat": round(ghost.last_lat, 4),
+            "last_lon": round(ghost.last_lon, 4),
+            "last_seen_tick": ghost.last_seen_tick,
+            "ticks_since_lost": ticks_since_lost,
+            "confidence_at_loss": round(ghost.confidence_at_loss, 3),
+            "still_alive": target.is_alive() if target else False,
+        })
+    ghosts.sort(key=lambda g: g["ticks_since_lost"])
+    return json.dumps({
+        "ghosts": ghosts,
+        "total_ghosts": len(ghosts),
+        "current_tick": sim.tick,
+        "ghost_expiry_ticks": 60,
+    }, indent=2)
+
+
+def handle_query_weapon_effectiveness(weapon_id: str, target_type: str) -> str:
+    """Look up weapon effectiveness against a target type."""
+    from simulation.profiles import WEAPON_PROFILES, CATEGORY_MAP, STRIKE_PROFILES
+
+    wp = WEAPON_PROFILES.get(weapon_id)
+    if wp is None:
+        available = list(WEAPON_PROFILES.keys())
+        return json.dumps({
+            "error": f"Unknown weapon '{weapon_id}'.",
+            "available_weapons": available,
+        })
+
+    target_profile = get_strike_profile(target_type)
+    category = CATEGORY_MAP.get(target_type, "soft_vehicle")
+
+    hit_prob = wp.accuracy
+    kill_prob = min(wp.penetration / max(target_profile.hardness, 0.01), 1.0)
+    overall_kill = hit_prob * kill_prob
+
+    return json.dumps({
+        "weapon_id": weapon_id,
+        "weapon": {
+            "accuracy": wp.accuracy,
+            "penetration": wp.penetration,
+            "blast_radius_m": wp.blast_radius_m,
+        },
+        "target_type": target_type,
+        "target_category": category,
+        "target": {
+            "hardness": target_profile.hardness,
+            "crew_survival": target_profile.crew_survival,
+        },
+        "effectiveness": {
+            "hit_probability_pct": round(hit_prob * 100),
+            "kill_given_hit_pct": round(kill_prob * 100),
+            "overall_kill_pct": round(overall_kill * 100),
+        },
+    }, indent=2)
+
+
+def handle_calculate_travel_time(asset_id: str, dest_lat: float, dest_lon: float) -> str:
+    """Calculate travel time for an asset to a destination without issuing an order."""
+    sim = _get_sim()
+    asset = _resolve_asset(sim, asset_id)
+    if asset is None:
+        return json.dumps({"error": f"Asset '{asset_id}' not found."})
+
+    speed = asset.max_speed_kmh or asset.speed_kmh
+    if speed <= 0:
+        return json.dumps({
+            "error": f"{asset.callsign} is stationary (speed=0) and cannot move.",
+            "asset_type": asset.asset_type,
+        })
+
+    distance = haversine_km(
+        asset.position.latitude, asset.position.longitude,
+        dest_lat, dest_lon,
+    )
+    from simulation.rules import bearing_degrees, ticks_to_arrive, TERRAIN_SPEED
+    terrain = "air" if asset.position.altitude_m > 100 else "open"
+    ticks = ticks_to_arrive(speed, distance, terrain, sim.tick_duration_s)
+    bearing = bearing_degrees(
+        asset.position.latitude, asset.position.longitude,
+        dest_lat, dest_lon,
+    )
+
+    return json.dumps({
+        "asset": {
+            "asset_id": asset.asset_id,
+            "callsign": asset.callsign,
+            "asset_type": asset.asset_type,
+            "current_lat": round(asset.position.latitude, 4),
+            "current_lon": round(asset.position.longitude, 4),
+        },
+        "destination": {
+            "lat": round(dest_lat, 4),
+            "lon": round(dest_lon, 4),
+        },
+        "distance_km": round(distance, 1),
+        "bearing_deg": round(bearing, 1),
+        "speed_kmh": speed,
+        "terrain": terrain,
+        "eta_ticks": ticks,
+        "eta_seconds": round(ticks * sim.tick_duration_s),
+    }, indent=2)
+
+
 TOOL_HANDLERS: dict[str, Any] = {
     "get_battlefield_summary": lambda args: handle_battlefield_summary(),
     "list_factions": lambda args: handle_list_factions(),
@@ -945,6 +1225,14 @@ TOOL_HANDLERS: dict[str, Any] = {
     "plan_multi_strike": lambda args: handle_plan_multi_strike(
         args.get("target_ids"), args.get("faction_id"), args.get("max_targets", 20),
     ),
+    "get_detected_contacts": lambda args: handle_get_detected_contacts(),
+    "get_ghost_contacts": lambda args: handle_get_ghost_contacts(),
+    "query_weapon_effectiveness": lambda args: handle_query_weapon_effectiveness(
+        args["weapon_id"], args["target_type"],
+    ),
+    "calculate_travel_time": lambda args: handle_calculate_travel_time(
+        args["asset_id"], args["dest_lat"], args["dest_lon"],
+    ),
 }
 
 
@@ -954,13 +1242,13 @@ TOOL_HANDLERS: dict[str, Any] = {
 @router.post("/sim-query")
 async def query_simulation(req: SimQueryRequest) -> SimQueryResponse:
     """Non-streaming simulation query."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="OPENAI_API_KEY not configured.")
+    client = get_llm_client()
+    if not client:
+        raise HTTPException(status_code=503, detail="No LLM API key configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY in .env.")
 
     try:
         messages = _build_messages(req)
-        answer = _run_agent(messages, api_key)
+        answer = _run_agent(messages, client)
         return SimQueryResponse(answer=answer)
     except Exception as e:
         logger.exception("Sim query agent failed")
@@ -970,13 +1258,13 @@ async def query_simulation(req: SimQueryRequest) -> SimQueryResponse:
 @router.post("/sim-query/stream")
 async def query_simulation_stream(req: SimQueryRequest) -> StreamingResponse:
     """Stream simulation query progress and final answer as SSE."""
-    api_key = os.environ.get("OPENAI_API_KEY")
+    client = get_llm_client()
 
     def event_stream() -> Generator[str, None, None]:
-        if not api_key:
+        if not client:
             yield _sse_event({
                 "type": "error",
-                "message": "OPENAI_API_KEY not configured.",
+                "message": "No LLM API key configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY in .env.",
             })
             return
 
@@ -985,7 +1273,7 @@ async def query_simulation_stream(req: SimQueryRequest) -> StreamingResponse:
             answer = ""
             messages = _build_messages(req)
 
-            for event in _run_agent_stream(messages, api_key):
+            for event in _run_agent_stream(messages, client):
                 event_type = event.get("type")
                 if event_type == "final_answer":
                     answer = str(event.get("answer", "No response generated."))
@@ -1005,9 +1293,8 @@ async def query_simulation_stream(req: SimQueryRequest) -> StreamingResponse:
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-def _run_agent(messages: list[dict], api_key: str) -> str:
+def _run_agent(messages: list[dict], client) -> str:
     """Run the tool-calling agent loop until a final answer."""
-    client = OpenAI(api_key=api_key)
 
     for _ in range(MAX_AGENT_STEPS):
         response = client.chat.completions.create(
@@ -1033,9 +1320,8 @@ def _run_agent(messages: list[dict], api_key: str) -> str:
     return "I ran out of steps. Try a simpler question."
 
 
-def _run_agent_stream(messages: list[dict], api_key: str) -> Generator[dict, None, None]:
+def _run_agent_stream(messages: list[dict], client) -> Generator[dict, None, None]:
     """Run the agent loop with true token-by-token streaming for final answers."""
-    client = OpenAI(api_key=api_key)
 
     for step in range(MAX_AGENT_STEPS):
         step_num = step + 1
@@ -1047,6 +1333,7 @@ def _run_agent_stream(messages: list[dict], api_key: str) -> Generator[dict, Non
             tools=TOOLS,
             tool_choice="auto",
             stream=True,
+            extra_body={"reasoning": {"effort": "high"}},
         )
 
         # Accumulate streamed response
@@ -1057,6 +1344,23 @@ def _run_agent_stream(messages: list[dict], api_key: str) -> Generator[dict, Non
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
+
+            # Stream thinking/reasoning tokens
+            reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+            if not reasoning:
+                # OpenRouter normalized format
+                details = getattr(delta, "reasoning_details", None)
+                if details:
+                    for detail in details:
+                        text = None
+                        if isinstance(detail, dict):
+                            text = detail.get("text") or detail.get("summary")
+                        else:
+                            text = getattr(detail, "text", None) or getattr(detail, "summary", None)
+                        if text:
+                            yield {"type": "thinking_delta", "content": text}
+            elif reasoning:
+                yield {"type": "thinking_delta", "content": reasoning}
 
             # Stream text content token-by-token
             if delta.content:

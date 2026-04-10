@@ -188,6 +188,7 @@ export type QueryStreamEvent =
   | { type: "tool_call"; name: string; args: Record<string, unknown>; step: number }
   | { type: "tool_result"; name: string; ok: boolean; preview: string; step: number }
   | { type: "text_delta"; content: string }
+  | { type: "thinking_delta"; content: string }
   | { type: "strike_plan"; lines: StrikePlanLine[]; total_targets: number; targets_engaged: number }
   | { type: "final"; answer: string; sources: Array<{ rid: string; name: string; type: string }> }
   | { type: "error"; message: string };

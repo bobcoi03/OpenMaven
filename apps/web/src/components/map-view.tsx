@@ -44,6 +44,7 @@ export interface MapViewProps {
   movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
   /** Asset ID to lock the camera and targeting reticle onto. */
   lockedAssetId?: string | null;
+  flyTo?: { lat: number; lng: number; zoom?: number } | null;
 }
 
 const MapViewInner = dynamic(
