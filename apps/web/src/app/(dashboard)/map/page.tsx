@@ -18,6 +18,7 @@ import { StrikeLogPanel } from "@/components/strike-log-panel";
 import { useMapLayers } from "@/lib/map-layer-context";
 import { useSimulation, type MissionUpdate } from "@/lib/use-simulation";
 import { useMapMove } from "@/lib/use-map-move";
+import { MiniMapPanel } from "@/components/mini-map-panel";
 import { useMapContextMenu } from "@/lib/use-map-context-menu";
 import { useSensorRanges } from "@/lib/use-sensor-ranges";
 import { simAssetsToTactical } from "@/lib/sim-to-tactical";
@@ -468,6 +469,7 @@ export default function MapPage() {
 
         {/* Top-right HUD: map style toggle + sensor toggle + help */}
         <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+          <MiniMapPanel assets={visibleAssets} visibleLayers={visibleLayers} />
           {/* Sensor range toggle */}
           <button
             onClick={() => setShowSensorRanges((v) => !v)}
