@@ -97,23 +97,6 @@ export default function MapPage() {
     }
   }, [sim.activeMissions, strikePlan]);
 
-  // Track initial distances for MissionQueuePanel progress bars
-  useEffect(() => {
-    for (const [id, mission] of Object.entries(sim.activeMissions)) {
-      if (missionInitialDistsRef.current[id] !== undefined) continue;
-      const shooter = sim.assets[mission.shooter_id];
-      const target = sim.assets[mission.target_id];
-      if (!shooter || !target) continue;
-      const dx = (shooter.position.longitude - target.position.longitude) * 111 * Math.cos((target.position.latitude * Math.PI) / 180);
-      const dy = (shooter.position.latitude - target.position.latitude) * 111;
-      missionInitialDistsRef.current[id] = Math.hypot(dx, dy);
-    }
-    // Clean up completed missions
-    for (const id of Object.keys(missionInitialDistsRef.current)) {
-      if (!sim.activeMissions[id]) delete missionInitialDistsRef.current[id];
-    }
-  }, [sim.activeMissions, sim.assets]);
-
   // Compute planned line coordinates from LIVE asset positions
   const plannedLines = useMemo(() => {
     if (!strikePlan) return null;
@@ -134,7 +117,24 @@ export default function MapPage() {
   const [pairingSelection, setPairingSelection] = useState<PairingSelection | null>(null);
   const [noShooterMsg, setNoShooterMsg] = useState(false);
   const [missionInitialDistKm, setMissionInitialDistKm] = useState(0);
+  // Per-mission initial distances for MissionQueuePanel progress bars
   const missionInitialDistsRef = useRef<Record<string, number>>({});
+
+  // Track initial distances when missions are first seen; clean up on completion
+  useEffect(() => {
+    for (const [id, mission] of Object.entries(sim.activeMissions)) {
+      if (missionInitialDistsRef.current[id] !== undefined) continue;
+      const shooter = sim.assets[mission.shooter_id];
+      const target = sim.assets[mission.target_id];
+      if (!shooter || !target) continue;
+      const dx = (shooter.position.longitude - target.position.longitude) * 111 * Math.cos((target.position.latitude * Math.PI) / 180);
+      const dy = (shooter.position.latitude - target.position.latitude) * 111;
+      missionInitialDistsRef.current[id] = Math.hypot(dx, dy);
+    }
+    for (const id of Object.keys(missionInitialDistsRef.current)) {
+      if (!sim.activeMissions[id]) delete missionInitialDistsRef.current[id];
+    }
+  }, [sim.activeMissions, sim.assets]);
 
   // Recompute live telemetry from current asset positions every tick
   const activePairing = useMemo(() => {
