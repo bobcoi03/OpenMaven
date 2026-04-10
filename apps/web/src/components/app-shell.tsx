@@ -72,6 +72,14 @@ interface ToolStep {
   preview?: string;
 }
 
+// ── Available LLM models ──────────────────────────────────────────────────────
+
+const LLM_MODELS: { id: string; label: string; sub: string }[] = [
+  { id: "gpt-4o-mini",  label: "GPT-4o Mini",  sub: "Fast · Cheap"    },
+  { id: "gpt-4o",       label: "GPT-4o",        sub: "Smart · Slower"  },
+  { id: "o3-mini",      label: "o3 Mini",       sub: "Reasoning"       },
+];
+
 // ── Layer config for the tactical sidebar ─────────────────────────────────────
 
 const LAYER_CFG: {
@@ -232,6 +240,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [isQuerying, setIsQuerying] = useState(false);
   const [toolSteps, setToolSteps] = useState<ToolStep[]>([]);
   const [thinkingText, setThinkingText] = useState("");
+  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
   const toolStepsRef = useRef<ToolStep[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -308,6 +319,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Close model menu on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setModelMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
   // ── AI query handler ──────────────────────────────────────────────
 
   async function handleQuerySubmit() {
@@ -322,12 +344,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setToolSteps([]);
     setThinkingText("");
 
-    const streamFn = querySimulationStream;
-
     let streamingText = "";
 
     try {
-      await streamFn(question, nextChatForApi, (event: QueryStreamEvent) => {
+      await querySimulationStream(question, nextChatForApi, (event: QueryStreamEvent) => {
         if (event.type === "tool_call") {
           setThinkingText("");
           setToolSteps((prev) => [
@@ -415,7 +435,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             },
           ]);
         }
-      });
+      }, selectedModel);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -813,6 +833,54 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Input */}
           <div className="px-3 py-2.5 border-t border-[var(--om-border)]">
+            {/* Model selector */}
+            <div ref={modelMenuRef} className="relative mb-1.5">
+              <button
+                onClick={() => setModelMenuOpen((v) => !v)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-[9px] font-medium cursor-pointer transition-colors w-full"
+                style={{
+                  background: "var(--om-bg-surface)",
+                  border: "1px solid var(--om-border)",
+                  color: "var(--om-text-secondary)",
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--om-green)] shrink-0" />
+                <span className="flex-1 text-left truncate">
+                  {LLM_MODELS.find((m) => m.id === selectedModel)?.label ?? selectedModel}
+                </span>
+                <ChevronDown size={9} className={`shrink-0 transition-transform ${modelMenuOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {modelMenuOpen && (
+                <div
+                  className="absolute bottom-full left-0 right-0 mb-1 rounded-sm overflow-hidden z-50"
+                  style={{
+                    background: "var(--om-bg-elevated)",
+                    border: "1px solid var(--om-border-strong)",
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+                  }}
+                >
+                  {LLM_MODELS.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedModel(m.id); setModelMenuOpen(false); }}
+                      className="w-full flex items-center justify-between px-2.5 py-2 text-left cursor-pointer transition-colors hover:bg-[var(--om-bg-hover)]"
+                    >
+                      <div>
+                        <div className={`text-[10px] font-semibold ${selectedModel === m.id ? "text-[var(--om-blue-light)]" : "text-[var(--om-text-primary)]"}`}>
+                          {m.label}
+                        </div>
+                        <div className="text-[8px] text-[var(--om-text-muted)]">{m.sub}</div>
+                      </div>
+                      {selectedModel === m.id && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-[var(--om-blue)] shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="bg-[var(--om-bg-surface)] border border-[var(--om-border)] focus-within:border-[var(--om-border-strong)] transition-colors rounded-sm">
               <textarea
                 value={queryText}

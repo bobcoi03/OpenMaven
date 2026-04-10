@@ -46,6 +46,7 @@ class ChatMessage(BaseModel):
 class SimQueryRequest(BaseModel):
     question: str
     messages: list[ChatMessage] = []
+    model: str | None = None
 
 
 class SimQueryResponse(BaseModel):
@@ -1273,7 +1274,7 @@ async def query_simulation_stream(req: SimQueryRequest) -> StreamingResponse:
             answer = ""
             messages = _build_messages(req)
 
-            for event in _run_agent_stream(messages, client):
+            for event in _run_agent_stream(messages, client, model=req.model or MODEL):
                 event_type = event.get("type")
                 if event_type == "final_answer":
                     answer = str(event.get("answer", "No response generated."))
@@ -1320,7 +1321,7 @@ def _run_agent(messages: list[dict], client) -> str:
     return "I ran out of steps. Try a simpler question."
 
 
-def _run_agent_stream(messages: list[dict], client) -> Generator[dict, None, None]:
+def _run_agent_stream(messages: list[dict], client, model: str = MODEL) -> Generator[dict, None, None]:
     """Run the agent loop with true token-by-token streaming for final answers."""
 
     for step in range(MAX_AGENT_STEPS):
@@ -1328,7 +1329,7 @@ def _run_agent_stream(messages: list[dict], client) -> Generator[dict, None, Non
         yield {"type": "status", "step": step_num, "message": f"Reasoning step {step_num}..."}
 
         stream = client.chat.completions.create(
-            model=MODEL,
+            model=model,
             messages=messages,
             tools=TOOLS,
             tool_choice="auto",
