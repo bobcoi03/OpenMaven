@@ -36,7 +36,9 @@ export function useMapSensorCircles(
     if (!map || !containerRef.current) return;
 
     function updateCircles() {
+      const map = mapRef.current;
       if (!map || !containerRef.current) return;
+      if (!map.isStyleLoaded()) return;
       const cnt = containerRef.current;
       const ranges = rangesRef.current ?? [];
       const visible = visibleRef.current;

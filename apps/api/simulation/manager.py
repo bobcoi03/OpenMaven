@@ -16,6 +16,7 @@ from simulation.assets import AssetStatus, MovementOrder, Position, SimAsset
 from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
 from simulation.detection import SensorReading, compute_detections
+from simulation.red_ai import RedAI
 from simulation.rules import (
     DependencyLink,
     bearing_degrees,
@@ -172,6 +173,7 @@ class SimulationManager:
 
         self._task: asyncio.Task[None] | None = None
         self._broadcast_fn: Any = None  # set externally by WebSocket manager
+        self._red_ai: RedAI = RedAI()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -724,10 +726,15 @@ class SimulationManager:
                 events_fired.append(event.model_dump())
                 self.event_log.append(event)
 
-        # 3. Fog of war — run detection
+        # 3. Red AI — doctrine-based counterattacks
+        red_result = self._red_ai.run_tick(self)
+        asset_updates.extend(red_result.asset_updates)
+        alerts.extend(red_result.alerts)
+
+        # 4. Fog of war — run detection
         detection_entries, ghost_entries = self._tick_detections()
 
-        # 4. Collect mission updates (resolved this tick + active en-route)
+        # 5. Collect mission updates (resolved this tick + active en-route)
         mission_updates: list[MissionUpdate] = []
         for m in self._missions_resolved_this_tick:
             mission_updates.append(MissionUpdate(
