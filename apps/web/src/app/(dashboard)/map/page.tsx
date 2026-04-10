@@ -23,6 +23,7 @@ import { useMapContextMenu } from "@/lib/use-map-context-menu";
 import { useSensorRanges } from "@/lib/use-sensor-ranges";
 import { simAssetsToTactical } from "@/lib/sim-to-tactical";
 import { findBestPairing, findAllPairings, refreshPairing, type PairingSelection } from "@/lib/strike-pairing";
+import { EventTimelineDrawer } from "@/components/event-timeline-drawer";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -633,6 +634,15 @@ export default function MapPage() {
             onClose={ctx.close}
           />
         )}
+
+        <EventTimelineDrawer
+          strikeLog={sim.strikeLog}
+          currentTick={sim.tick}
+          onFocusAsset={(assetId) => {
+            const asset = sim.assets[assetId];
+            if (asset) setSelectedAsset(asset);
+          }}
+        />
       </div>
     </div>
   );
