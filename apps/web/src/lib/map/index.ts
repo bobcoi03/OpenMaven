@@ -6,3 +6,4 @@ export { useMapSensorCircles } from "./use-map-sensor-circles";
 export { useMapTargetLock } from "./use-map-target-lock";
 export { useMapHeatmap } from "./use-map-heatmap";
 export { useMapZoneControl } from "./use-map-zone-control";
+export { useMapWaypoints } from "./use-map-waypoints";
