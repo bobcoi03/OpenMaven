@@ -18,6 +18,7 @@ import { StrikeLogPanel } from "@/components/strike-log-panel";
 import { useMapLayers } from "@/lib/map-layer-context";
 import { useSimulation, type MissionUpdate } from "@/lib/use-simulation";
 import { useMapMove } from "@/lib/use-map-move";
+import { useMapWaypointMode } from "@/lib/use-map-waypoint-mode";
 import { MiniMapPanel } from "@/components/mini-map-panel";
 import { useMapContextMenu } from "@/lib/use-map-context-menu";
 import { useSensorRanges } from "@/lib/use-sensor-ranges";
@@ -303,6 +304,8 @@ export default function MapPage() {
     onSelectAsset: setSelectedAsset,
   });
 
+  const waypoint = useMapWaypointMode({ assets: sim.assets, moveAsset: sim.moveAsset });
+
   const ctx = useMapContextMenu({
     assets: sim.assets,
     onSelectAsset: setSelectedAsset,
@@ -354,7 +357,7 @@ export default function MapPage() {
           selectedId={selectedId}
           mapStyle={mapStyle}
           onContextMenu={ctx.handleContextMenu}
-          onMapClick={move.moveMode ? move.handleMapClick : undefined}
+          onMapClick={waypoint.waypointAssetId ? waypoint.handleMapClick : move.moveMode ? move.handleMapClick : undefined}
           movePath={move.movePath}
           onMovePathDrag={move.handleDrag}
           sensorRanges={sensorRanges}
@@ -368,6 +371,8 @@ export default function MapPage() {
           showZoneControl={showZoneControl}
           lockedAssetId={lockedAssetId}
           flyTo={flyTo}
+          waypointAssetId={waypoint.waypointAssetId}
+          waypoints={waypoint.waypoints}
         />
 
         {/* Move-mode indicator */}
@@ -405,6 +410,39 @@ export default function MapPage() {
                 <span className="text-[var(--om-text-muted)] text-[9px] ml-1">ESC to cancel</span>
               </>
             )}
+          </div>
+        )}
+
+        {/* Waypoint mode indicator */}
+        {waypoint.waypointAssetId && (
+          <div
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded-sm text-[10px] font-semibold"
+            style={{
+              background: "rgba(45,114,210,0.15)",
+              border: "1px solid rgba(45,114,210,0.4)",
+              color: "var(--om-blue-light)",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <span>WAYPOINT MODE</span>
+            <span className="opacity-50">·</span>
+            <span>{sim.assets[waypoint.waypointAssetId]?.callsign ?? waypoint.waypointAssetId}</span>
+            <span className="opacity-50">·</span>
+            <span>{waypoint.waypoints.length} / 5 points</span>
+            {waypoint.waypoints.length > 0 && (
+              <button
+                onClick={waypoint.confirm}
+                className="px-2 py-0.5 bg-[var(--om-blue)]/20 border border-[var(--om-blue)]/40 rounded-sm hover:bg-[var(--om-blue)]/30 cursor-pointer transition-colors"
+              >
+                Confirm
+              </button>
+            )}
+            <button
+              onClick={waypoint.cancel}
+              className="text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] cursor-pointer"
+            >
+              Cancel
+            </button>
           </div>
         )}
 
@@ -651,6 +689,7 @@ export default function MapPage() {
             selectedAssetId={selectedId}
             onAction={ctx.handleAction}
             onClose={ctx.close}
+            onStartWaypointMode={waypoint.startWaypointMode}
           />
         )}
 

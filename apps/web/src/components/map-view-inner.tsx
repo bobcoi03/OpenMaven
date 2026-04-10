@@ -20,9 +20,11 @@ import {
   useMapTargetLock,
   useMapHeatmap,
   useMapZoneControl,
+  useMapWaypoints,
   MAP_STYLES,
   type MapStyleId,
 } from "@/lib/map";
+import type { Waypoint } from "@/lib/use-map-waypoint-mode";
 
 // Re-export for consumers
 export { MAP_STYLES, type MapStyleId };
@@ -57,6 +59,8 @@ interface TacticalMapProps {
   showHeatmap?: boolean;
   showZoneControl?: boolean;
   flyTo?: { lat: number; lng: number; zoom?: number } | null;
+  waypointAssetId?: string | null;
+  waypoints?: Waypoint[];
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -83,6 +87,8 @@ export function MapViewInner({
   showHeatmap = false,
   showZoneControl = false,
   flyTo,
+  waypointAssetId = null,
+  waypoints = [],
 }: TacticalMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -132,6 +138,7 @@ export function MapViewInner({
 
   useMapHeatmap(mapRef, { assets, visible: showHeatmap });
   useMapZoneControl(mapRef, { assets, visible: showZoneControl });
+  useMapWaypoints(mapRef, { waypointAssetId, waypoints, assets });
 
   return (
     <div

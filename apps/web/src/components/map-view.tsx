@@ -10,6 +10,7 @@
 import dynamic from "next/dynamic";
 import type { TacticalAsset, AssetClass } from "@/lib/tactical-mock";
 import type { MapStyleId } from "./map-view-inner";
+import type { Waypoint } from "@/lib/use-map-waypoint-mode";
 
 export interface MapViewProps {
   assets: TacticalAsset[];
@@ -47,6 +48,8 @@ export interface MapViewProps {
   showHeatmap?: boolean;
   showZoneControl?: boolean;
   flyTo?: { lat: number; lng: number; zoom?: number } | null;
+  waypointAssetId?: string | null;
+  waypoints?: Waypoint[];
 }
 
 const MapViewInner = dynamic(
