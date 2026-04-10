@@ -478,7 +478,8 @@ export default function MapPage() {
         {/* Lock Target button — shown when an asset is selected and not yet locked */}
         {selectedId && selectedId !== lockedAssetId && (
           <div
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30"
+            className="absolute left-1/2 -translate-x-1/2 z-30"
+            style={{ bottom: 32 }}
           >
             <button
               onClick={() => setLockedAssetId(selectedId)}

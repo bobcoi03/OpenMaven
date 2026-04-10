@@ -74,10 +74,16 @@ interface ToolStep {
 
 // ── Available LLM models ──────────────────────────────────────────────────────
 
-const LLM_MODELS: { id: string; label: string; sub: string }[] = [
-  { id: "gpt-4o-mini",  label: "GPT-4o Mini",  sub: "Fast · Cheap"    },
-  { id: "gpt-4o",       label: "GPT-4o",        sub: "Smart · Slower"  },
-  { id: "o3-mini",      label: "o3 Mini",       sub: "Reasoning"       },
+interface LLMModel { id: string; label: string; sub: string; provider: string }
+
+// Full catalogue — availability determined at runtime from /api/sim-query/models
+const ALL_LLM_MODELS: LLMModel[] = [
+  { id: "gpt-4o-mini",                   label: "GPT-4o Mini",        sub: "Fast · Cheap",         provider: "openai"      },
+  { id: "gpt-4o",                        label: "GPT-4o",             sub: "Smart · Slower",        provider: "openai"      },
+  { id: "o3-mini",                       label: "o3 Mini",            sub: "Reasoning",             provider: "openai"      },
+  { id: "google/gemini-2.5-pro",         label: "Gemini 2.5 Pro",     sub: "Google · Fast",         provider: "openrouter"  },
+  { id: "anthropic/claude-sonnet-4-5",   label: "Claude Sonnet 4.5",  sub: "Anthropic · Balanced",  provider: "openrouter"  },
+  { id: "meta-llama/llama-4-maverick",   label: "Llama 4 Maverick",   sub: "Meta · Open source",    provider: "openrouter"  },
 ];
 
 // ── Layer config for the tactical sidebar ─────────────────────────────────────
@@ -241,10 +247,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [toolSteps, setToolSteps] = useState<ToolStep[]>([]);
   const [thinkingText, setThinkingText] = useState("");
   const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
+  const [availableModelIds, setAvailableModelIds] = useState<Set<string>>(
+    new Set(["gpt-4o-mini", "gpt-4o", "o3-mini"]),
+  );
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const toolStepsRef = useRef<ToolStep[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch available models from backend on mount
+  useEffect(() => {
+    fetch("/api/sim-query/models")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data?.models) return;
+        const ids = new Set<string>(data.models.map((m: { id: string }) => m.id));
+        setAvailableModelIds(ids);
+        // If the current default isn't available, pick the first that is
+        setSelectedModel((prev) => ids.has(prev) ? prev : (data.models[0]?.id ?? prev));
+      })
+      .catch(() => { /* keep defaults */ });
+  }, []);
 
   // Keep tool steps ref in sync for closure access
   useEffect(() => {
@@ -846,7 +869,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--om-green)] shrink-0" />
                 <span className="flex-1 text-left truncate">
-                  {LLM_MODELS.find((m) => m.id === selectedModel)?.label ?? selectedModel}
+                  {ALL_LLM_MODELS.find((m) => m.id === selectedModel)?.label ?? selectedModel}
                 </span>
                 <ChevronDown size={9} className={`shrink-0 transition-transform ${modelMenuOpen ? "rotate-180" : ""}`} />
               </button>
@@ -860,23 +883,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
                   }}
                 >
-                  {LLM_MODELS.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => { setSelectedModel(m.id); setModelMenuOpen(false); }}
-                      className="w-full flex items-center justify-between px-2.5 py-2 text-left cursor-pointer transition-colors hover:bg-[var(--om-bg-hover)]"
-                    >
-                      <div>
-                        <div className={`text-[10px] font-semibold ${selectedModel === m.id ? "text-[var(--om-blue-light)]" : "text-[var(--om-text-primary)]"}`}>
-                          {m.label}
+                  {ALL_LLM_MODELS.map((m) => {
+                    const available = availableModelIds.has(m.id);
+                    const active = selectedModel === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        disabled={!available}
+                        onClick={() => { setSelectedModel(m.id); setModelMenuOpen(false); }}
+                        className="w-full flex items-center justify-between px-2.5 py-2 text-left transition-colors"
+                        style={{ cursor: available ? "pointer" : "not-allowed", opacity: available ? 1 : 0.35 }}
+                        title={available ? undefined : `Requires ${m.provider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY"}`}
+                      >
+                        <div>
+                          <div className={`text-[10px] font-semibold ${active ? "text-[var(--om-blue-light)]" : "text-[var(--om-text-primary)]"}`}>
+                            {m.label}
+                          </div>
+                          <div className="text-[8px] text-[var(--om-text-muted)]">{m.sub}{!available && " · Locked"}</div>
                         </div>
-                        <div className="text-[8px] text-[var(--om-text-muted)]">{m.sub}</div>
-                      </div>
-                      {selectedModel === m.id && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-[var(--om-blue)] shrink-0" />
-                      )}
-                    </button>
-                  ))}
+                        {active && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-[var(--om-blue)] shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

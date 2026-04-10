@@ -202,9 +202,11 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
   const [strikeLog, setStrikeLog] = useState<StrikeLogEntry[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
-  // Keep a ref to assets for mission update callbacks
+  // Keep refs to assets/tick for use inside WS message closures
   const assetsRef = useRef(assets);
   assetsRef.current = assets;
+  const tickRef = useRef(tick);
+  tickRef.current = tick;
 
   // ── Send helper ─────────────────────────────────────────────────────
 
@@ -479,17 +481,34 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
     if (msg.type === "strike_mission_result") {
       const data = msg.data ?? msg;
       if (data.mission_id && !data.error) {
+        const shooterId = data.shooter_id as string;
+        const targetId  = data.target_id  as string;
         setActiveMissions((prev) => ({
           ...prev,
           [data.mission_id as string]: {
             mission_id: data.mission_id as string,
-            shooter_id: data.shooter_id as string,
+            shooter_id: shooterId,
             weapon_id: data.weapon_id as string,
-            target_id: data.target_id as string,
+            target_id: targetId,
             status: "en_route" as const,
             result: null,
           },
         }));
+        // Log launch event so the Event Timeline shows it immediately
+        const currentAssets = assetsRef.current;
+        setStrikeLog((prev) => [
+          {
+            mission_id: data.mission_id as string,
+            shooter_callsign: currentAssets[shooterId]?.callsign ?? shooterId,
+            weapon_id: data.weapon_id as string,
+            target_callsign: currentAssets[targetId]?.callsign ?? targetId,
+            target_id: targetId,
+            status: "en_route",
+            result: null,
+            tick: tickRef.current,
+          },
+          ...prev,
+        ]);
       }
       return;
     }
