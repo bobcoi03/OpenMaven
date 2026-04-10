@@ -27,7 +27,7 @@ import { findBestPairing, findAllPairings, refreshPairing, type PairingSelection
 
 export default function MapPage() {
   const router = useRouter();
-  const { visibleLayers, selectedAsset, setSelectedAsset } = useMapLayers();
+  const { visibleLayers, selectedAsset, setSelectedAsset, showHeatmap, showZoneControl } = useMapLayers();
   const searchParams = useSearchParams();
   const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
 
@@ -343,6 +343,8 @@ export default function MapPage() {
           strikeLines={strikeLines}
           plannedLines={plannedLines}
           movementLines={movementLines}
+          showHeatmap={showHeatmap}
+          showZoneControl={showZoneControl}
           lockedAssetId={lockedAssetId}
           flyTo={flyTo}
         />

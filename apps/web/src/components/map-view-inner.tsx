@@ -18,6 +18,8 @@ import {
   useMapLines,
   useMapSensorCircles,
   useMapTargetLock,
+  useMapHeatmap,
+  useMapZoneControl,
   MAP_STYLES,
   type MapStyleId,
 } from "@/lib/map";
@@ -52,6 +54,8 @@ interface TacticalMapProps {
   plannedLines?: Array<{ from: [number, number]; to: [number, number] }> | null;
   movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
   lockedAssetId?: string | null;
+  showHeatmap?: boolean;
+  showZoneControl?: boolean;
   flyTo?: { lat: number; lng: number; zoom?: number } | null;
 }
 
@@ -76,6 +80,8 @@ export function MapViewInner({
   plannedLines,
   movementLines,
   lockedAssetId,
+  showHeatmap = false,
+  showZoneControl = false,
   flyTo,
 }: TacticalMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -123,6 +129,9 @@ export function MapViewInner({
     lockedAssetId,
     assets,
   });
+
+  useMapHeatmap(mapRef, { assets, visible: showHeatmap });
+  useMapZoneControl(mapRef, { assets, visible: showZoneControl });
 
   return (
     <div
