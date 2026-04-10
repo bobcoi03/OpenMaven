@@ -1,14 +1,5 @@
 "use client";
 
-/**
- * map-layer-context.tsx
- *
- * Provides a React context for toggling tactical map layer visibility
- * (Military, Infrastructure, Logistics).  Consumed by the AppShell left
- * sidebar (to render the toggle controls) and by MapViewInner (to filter
- * which asset classes are rendered as map markers).
- */
-
 import { createContext, useContext, useState, useCallback } from "react";
 import type { AssetClass } from "@/lib/tactical-mock";
 import type { SimAsset } from "@/lib/use-simulation";
@@ -19,6 +10,10 @@ interface MapLayerContextValue {
   isVisible: (layer: AssetClass) => boolean;
   selectedAsset: SimAsset | null;
   setSelectedAsset: (asset: SimAsset | null) => void;
+  showHeatmap: boolean;
+  toggleHeatmap: () => void;
+  showZoneControl: boolean;
+  toggleZoneControl: () => void;
 }
 
 const MapLayerContext = createContext<MapLayerContextValue>({
@@ -27,6 +22,10 @@ const MapLayerContext = createContext<MapLayerContextValue>({
   isVisible: () => true,
   selectedAsset: null,
   setSelectedAsset: () => {},
+  showHeatmap: false,
+  toggleHeatmap: () => {},
+  showZoneControl: false,
+  toggleZoneControl: () => {},
 });
 
 export function MapLayerProvider({ children }: { children: React.ReactNode }) {
@@ -34,6 +33,8 @@ export function MapLayerProvider({ children }: { children: React.ReactNode }) {
     new Set(["Military", "Infrastructure", "Logistics"] as AssetClass[]),
   );
   const [selectedAsset, setSelectedAssetRaw] = useState<SimAsset | null>(null);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showZoneControl, setShowZoneControl] = useState(false);
 
   function toggleLayer(layer: AssetClass) {
     setVisibleLayers((prev) => {
@@ -56,6 +57,10 @@ export function MapLayerProvider({ children }: { children: React.ReactNode }) {
         isVisible: (layer) => visibleLayers.has(layer),
         selectedAsset,
         setSelectedAsset,
+        showHeatmap,
+        toggleHeatmap: () => setShowHeatmap((v) => !v),
+        showZoneControl,
+        toggleZoneControl: () => setShowZoneControl((v) => !v),
       }}
     >
       {children}
