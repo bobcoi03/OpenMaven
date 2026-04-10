@@ -213,7 +213,7 @@ function ToolStepGroup({ steps, live = false }: { steps: ToolStep[]; live?: bool
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { graph } = useAppData();
-  const { visibleLayers, toggleLayer, selectedAsset, setSelectedAsset } = useMapLayers();
+  const { visibleLayers, toggleLayer, selectedAsset, setSelectedAsset, showHeatmap, toggleHeatmap, showZoneControl, toggleZoneControl } = useMapLayers();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -586,6 +586,53 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </div>
+
+          {/* Overlay toggles — only on /map */}
+          {pathname === "/map" && (
+            <div className="px-2 pt-2 pb-1">
+              <div className="border-t border-[var(--om-border)] mb-2" />
+              <div className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em] px-0.5 mb-1.5">
+                Overlays
+              </div>
+              <div className="space-y-1">
+                {[
+                  { label: "Threat Heatmap", description: "Red-force density", isOn: showHeatmap, toggle: toggleHeatmap },
+                  { label: "Zone Control",   description: "Faction territories", isOn: showZoneControl, toggle: toggleZoneControl },
+                ].map(({ label, description, isOn, toggle }) => (
+                  <button
+                    key={label}
+                    onClick={toggle}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm transition-all cursor-pointer"
+                    style={{
+                      background: isOn ? "var(--om-bg-surface)" : "transparent",
+                      border: `1px solid ${isOn ? "var(--om-border-strong)" : "var(--om-border)"}`,
+                      opacity: isOn ? 1 : 0.45,
+                    }}
+                  >
+                    <div
+                      className="w-3 h-3 rounded-sm shrink-0 flex items-center justify-center transition-all"
+                      style={{
+                        background: isOn ? "var(--om-blue)" : "transparent",
+                        border: `1.5px solid ${isOn ? "var(--om-blue)" : "var(--om-text-muted)"}`,
+                      }}
+                    >
+                      {isOn && (
+                        <svg width="7" height="5" viewBox="0 0 7 5" fill="none">
+                          <polyline points="1,2.5 3,4.5 6,1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <div className={`text-[11px] font-semibold truncate ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-muted)]"}`}>
+                        {label}
+                      </div>
+                      <div className="text-[9px] text-[var(--om-text-muted)]">{description}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Theatre info */}
           <div className="mt-auto px-3 py-3 border-t border-[var(--om-border)]">
