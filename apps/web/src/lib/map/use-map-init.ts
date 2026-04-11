@@ -111,17 +111,11 @@ export function useMapInit(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch style — wait for any in-flight style load to finish first
+  // Switch style — only when map is fully loaded (avoids projection error on init)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
-    if (map.isStyleLoaded()) {
-      map.setStyle(resolvedStyle);
-    } else {
-      const onLoad = () => map.setStyle(resolvedStyle);
-      map.once("load", onLoad);
-      return () => map.off("load", onLoad);
-    }
+    if (!map || !map.isStyleLoaded()) return;
+    map.setStyle(resolvedStyle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options.mapStyle]);
 

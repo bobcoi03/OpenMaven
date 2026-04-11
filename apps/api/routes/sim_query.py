@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from dependencies import get_llm_client, LLM_MODEL
+from dependencies import get_llm_client, get_client_for_model, LLM_MODEL
 from simulation.profiles import WEAPON_PROFILES, get_strike_profile
 from simulation.rules import haversine_km
 
@@ -24,6 +24,36 @@ logger = logging.getLogger(__name__)
 
 MODEL = LLM_MODEL
 MAX_AGENT_STEPS = 30
+
+# ── Available models catalogue ────────────────────────────────────────────────
+
+_OPENAI_MODELS = [
+    {"id": "gpt-4o-mini",  "label": "GPT-4o Mini",       "sub": "Fast · Cheap",    "provider": "openai"},
+    {"id": "gpt-4o",       "label": "GPT-4o",             "sub": "Smart · Slower",  "provider": "openai"},
+    {"id": "o3-mini",      "label": "o3 Mini",            "sub": "Reasoning",       "provider": "openai"},
+]
+
+_OPENROUTER_MODELS = [
+    {"id": "google/gemini-2.5-pro",          "label": "Gemini 2.5 Pro",   "sub": "Google · Fast",        "provider": "openrouter"},
+    {"id": "anthropic/claude-sonnet-4-5",    "label": "Claude Sonnet 4.5","sub": "Anthropic · Balanced", "provider": "openrouter"},
+    {"id": "meta-llama/llama-4-maverick",    "label": "Llama 4 Maverick", "sub": "Meta · Open source",   "provider": "openrouter"},
+]
+
+
+@router.get("/sim-query/models")
+async def list_models():
+    """Return available models based on configured API keys."""
+    import os
+    has_openai = bool(os.environ.get("OPENAI_API_KEY"))
+    has_openrouter = bool(os.environ.get("OPENROUTER_API_KEY"))
+
+    models = []
+    if has_openai:
+        models.extend(_OPENAI_MODELS)
+    if has_openrouter:
+        models.extend(_OPENROUTER_MODELS)
+
+    return {"models": models, "has_openai": has_openai, "has_openrouter": has_openrouter}
 
 
 # ── Lazy singleton ────────────────────────────────────────────────────────
@@ -1259,22 +1289,19 @@ async def query_simulation(req: SimQueryRequest) -> SimQueryResponse:
 @router.post("/sim-query/stream")
 async def query_simulation_stream(req: SimQueryRequest) -> StreamingResponse:
     """Stream simulation query progress and final answer as SSE."""
-    client = get_llm_client()
 
     def event_stream() -> Generator[str, None, None]:
-        if not client:
-            yield _sse_event({
-                "type": "error",
-                "message": "No LLM API key configured. Set OPENROUTER_API_KEY or OPENAI_API_KEY in .env.",
-            })
-            return
-
         try:
             yield _sse_event({"type": "status", "message": "Analyzing question..."})
             answer = ""
             messages = _build_messages(req)
 
-            for event in _run_agent_stream(messages, client, model=req.model or MODEL):
+            resolved_model = req.model or MODEL
+            resolved_client = get_client_for_model(resolved_model)
+            if not resolved_client:
+                yield _sse_event({"type": "error", "message": f"No API key configured for model '{resolved_model}'."})
+                return
+            for event in _run_agent_stream(messages, resolved_client, model=resolved_model):
                 event_type = event.get("type")
                 if event_type == "final_answer":
                     answer = str(event.get("answer", "No response generated."))

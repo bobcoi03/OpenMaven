@@ -55,7 +55,11 @@ export function EventTimelineDrawer({ strikeLog, currentTick: _currentTick, onFo
         let kind: EventKind = "launched";
         let label = `${entry.shooter_callsign} → ${entry.target_callsign}`;
 
-        if (outcome === "destroyed") { kind = "destroyed"; label = `${entry.target_callsign} DESTROYED by ${entry.shooter_callsign}`; }
+        if (entry.status === "counterattack") {
+          kind = "counterattack";
+          const outcomeTag = outcome === "destroyed" ? "DESTROYED" : outcome === "damaged" ? "HIT" : outcome === "missed" ? "MISSED" : "ENGAGED";
+          label = `COUNTER-FIRE ${entry.shooter_callsign} → ${entry.target_callsign} [${outcomeTag}]`;
+        } else if (outcome === "destroyed") { kind = "destroyed"; label = `${entry.target_callsign} DESTROYED by ${entry.shooter_callsign}`; }
         else if (outcome === "damaged") { kind = "hit"; label = `${entry.target_callsign} HIT by ${entry.shooter_callsign}`; }
         else if (outcome === "missed") { kind = "miss"; label = `${entry.shooter_callsign} MISSED ${entry.target_callsign}`; }
         else if (entry.status === "aborted") { kind = "aborted"; label = `Mission aborted — ${entry.target_callsign}`; }
