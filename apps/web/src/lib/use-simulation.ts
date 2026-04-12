@@ -111,6 +111,21 @@ export interface StrikeLogEntry {
   tick: number;
 }
 
+export interface SigintIntercept {
+  intercept_id: string;
+  tick: number;
+  emitter_asset_id: string;
+  emitter_callsign: string;
+  intercepted_by_id: string;
+  intercepted_by_callsign: string;
+  lat: number;
+  lon: number;
+  frequency_band: string;
+  signal_type: string;
+  confidence: number;
+  threat_level: "HIGH" | "MED" | "LOW";
+}
+
 export interface StateDiff {
   tick: number;
   asset_updates: Array<Record<string, unknown>>;
@@ -119,6 +134,7 @@ export interface StateDiff {
   detections: DetectionEntry[];
   ghosts: GhostEntry[];
   mission_updates: MissionUpdate[];
+  sigint_intercepts?: SigintIntercept[];
 }
 export interface DetectionRecord {
   detection_id: string;
@@ -166,6 +182,8 @@ interface UseSimulationReturn {
   activeMissions: Record<string, MissionUpdate>;
   /** Completed/aborted strike log entries */
   strikeLog: StrikeLogEntry[];
+  /** Live SIGINT intercepts — newest first, capped at 50 */
+  sigintIntercepts: SigintIntercept[];
   /** Set simulation speed (0=pause, 1, 2, 5, 10) */
   setSpeed: (speed: number) => void;
   /** Execute a strike */
@@ -201,6 +219,7 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
   const [ghosts, setGhosts] = useState<Record<string, GhostEntry>>({});
   const [activeMissions, setActiveMissions] = useState<Record<string, MissionUpdate>>({});
   const [strikeLog, setStrikeLog] = useState<StrikeLogEntry[]>([]);
+  const [sigintIntercepts, setSigintIntercepts] = useState<SigintIntercept[]>([]);
 
   const { addNotification } = useNotifications();
 
@@ -482,6 +501,26 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
           return next;
         });
       }
+
+      // SIGINT intercepts — prepend new, cap ring-buffer to 50
+      if (diff.sigint_intercepts && diff.sigint_intercepts.length > 0) {
+        setSigintIntercepts((prev) => {
+          const next = [...diff.sigint_intercepts!, ...prev];
+          return next.length > 50 ? next.slice(0, 50) : next;
+        });
+        // Fire amber notification for HIGH confidence intercepts
+        for (const intercept of diff.sigint_intercepts) {
+          if (intercept.threat_level === "HIGH") {
+            addNotification({
+              severity: "amber",
+              title: "SIGINT — High confidence intercept",
+              body: `${intercept.emitter_callsign} · ${intercept.frequency_band} · ${Math.round(intercept.confidence * 100)}%`,
+              assetLon: intercept.lon,
+              assetLat: intercept.lat,
+            });
+          }
+        }
+      }
       return;
     }
 
@@ -599,6 +638,7 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
     ghosts,
     activeMissions,
     strikeLog,
+    sigintIntercepts,
     setSpeed,
     strike,
     strikeMission,
