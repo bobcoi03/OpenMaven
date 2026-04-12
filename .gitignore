@@ -42,3 +42,4 @@ neo4j_data/
 htmlcov/
 .coverage
 .worktrees/
+.gstack/
