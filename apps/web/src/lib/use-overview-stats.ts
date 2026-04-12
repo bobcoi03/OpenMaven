@@ -36,7 +36,8 @@ export interface MissionSummary {
 export interface OverviewStats {
   /** Always ordered: BLUFOR first, REDFOR second, others after. */
   factions: FactionStats[];
-  /** REDFOR destroyed / BLUFOR destroyed. null when BLUFOR destroyed === 0. */
+  /** REDFOR destroyed / BLUFOR destroyed.
+   *  null when either faction is absent or BLUFOR destroyed === 0. */
   kdRatio: number | null;
   missionSummary: MissionSummary;
   /** strikeLog.slice(0, 50) — newest first (ordering comes from use-simulation). */
