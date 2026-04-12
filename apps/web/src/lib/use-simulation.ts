@@ -210,6 +210,8 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
   assetsRef.current = assets;
   const tickRef = useRef(tick);
   tickRef.current = tick;
+  const detectionsRef = useRef(detections);
+  detectionsRef.current = detections;
 
   // ── Send helper ─────────────────────────────────────────────────────
 
@@ -380,15 +382,18 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
           dMap[d.target_id] = d;
         }
         setDetections(dMap);
-        // Emit notifications for new contacts
+        // Emit notifications only for contacts not present in the previous tick
+        const prevDetections = detectionsRef.current;
         for (const d of diff.detections) {
-          addNotification({
-            severity: "blue",
-            title: "New contact",
-            body: `${d.lat.toFixed(2)}°N, ${d.lon.toFixed(2)}°E — confidence ${Math.round(d.confidence * 100)}%`,
-            assetLon: d.lon,
-            assetLat: d.lat,
-          });
+          if (!prevDetections[d.target_id]) {
+            addNotification({
+              severity: "blue",
+              title: "New contact",
+              body: `${d.lat.toFixed(2)}°N, ${d.lon.toFixed(2)}°E — confidence ${Math.round(d.confidence * 100)}%`,
+              assetLon: d.lon,
+              assetLat: d.lat,
+            });
+          }
         }
       }
       if (diff.ghosts) {
@@ -445,10 +450,14 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
                 assetLat: target?.position.latitude,
               });
             } else if (mu.status === "aborted") {
+              const shooter = currentAssets[mu.shooter_id];
+              const abortTarget = currentAssets[mu.target_id];
               addNotification({
                 severity: "amber",
                 title: "Mission aborted",
-                body: `Mission ${mu.mission_id.slice(0, 8)}`,
+                body: shooter && abortTarget
+                  ? `${shooter.callsign} → ${abortTarget.callsign}`
+                  : `Mission ${mu.mission_id.slice(0, 8)}`,
               });
             }
           }
