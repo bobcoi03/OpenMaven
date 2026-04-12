@@ -35,7 +35,7 @@ function healthColor(pct: number): string {
 
 function eventDotColor(status: string): string {
   if (status === "complete") return T.greenLt;
-  if (status === "aborted") return T.orangeLt;
+  if (status === "aborted" || status === "en_route") return T.orangeLt;
   if (status === "counterattack") return T.redLt;
   return T.blueLt;
 }
