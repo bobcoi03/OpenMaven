@@ -19,6 +19,7 @@ from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
 from simulation.detection import SensorReading, compute_detections
 from simulation.red_ai import RedAI
+from simulation.sigint import SigintIntercept, compute_sigint_intercepts
 from simulation.rules import (
     DependencyLink,
     bearing_degrees,
@@ -121,6 +122,7 @@ class StateDiff(BaseModel):
     detections: list[DetectionEntry] = []
     ghosts: list[GhostEntry] = []
     mission_updates: list[MissionUpdate] = []
+    sigint_intercepts: list[SigintIntercept] = []
 
 
 # ── Manager ──────────────────────────────────────────────────────────────────
@@ -786,6 +788,13 @@ class SimulationManager:
                 status=m.status,
             ))
 
+        sigint_intercepts = compute_sigint_intercepts(
+            assets=self.assets,
+            factions=self.factions,
+            rng=self._rng,
+            tick=self.tick,
+        )
+
         return StateDiff(
             tick=self.tick,
             asset_updates=asset_updates,
@@ -794,6 +803,7 @@ class SimulationManager:
             detections=detection_entries,
             ghosts=ghost_entries,
             mission_updates=mission_updates,
+            sigint_intercepts=sigint_intercepts,
         )
 
     def _tick_movement(self, asset: SimAsset) -> dict[str, Any] | None:
