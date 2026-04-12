@@ -9,7 +9,7 @@
  * Must be loaded via next/dynamic with ssr:false — maplibre-gl is browser-only.
  */
 
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import type { TacticalAsset, AssetClass } from "@/lib/tactical-mock";
 import {
   useMapInit,
@@ -25,6 +25,7 @@ import {
   type MapStyleId,
 } from "@/lib/map";
 import type { Waypoint } from "@/lib/use-map-waypoint-mode";
+import { useMapLayers } from "@/lib/map-layer-context";
 
 // Re-export for consumers
 export { MAP_STYLES, type MapStyleId };
@@ -100,6 +101,17 @@ export function MapViewInner({
     onClick: onMapClick,
     flyTo,
   });
+
+  const { focusCoords, setFocusCoords } = useMapLayers();
+
+  useEffect(() => {
+    if (!focusCoords) return;
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo({ center: [focusCoords.lng, focusCoords.lat], zoom: 12, duration: 1000 });
+    // Clear after use so the same coords can trigger again on the next click
+    setFocusCoords(null);
+  }, [focusCoords, setFocusCoords]);
 
   const markersRef = useMapMarkers(mapRef, {
     assets,
