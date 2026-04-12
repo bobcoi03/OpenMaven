@@ -125,7 +125,7 @@ export function NotificationTray() {
               </SheetTitle>
               {notifications.length > 0 && (
                 <button
-                  onClick={clearAll}
+                  onClick={() => { clearAll(); setOpen(false); }}
                   style={{
                     fontSize: "11px",
                     color: "var(--om-text-muted)",

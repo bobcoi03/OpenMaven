@@ -11,7 +11,6 @@ export interface Notification {
   assetLon?: number;
   assetLat?: number;
   timestamp: number;
-  read: boolean;
 }
 
 interface NotificationContextValue {
@@ -32,13 +31,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const addNotification = useCallback(
-    (n: Omit<Notification, "id" | "timestamp" | "read">) => {
+    (n: Omit<Notification, "id" | "timestamp">) => {
       setNotifications((prev) => [
         {
           ...n,
           id: crypto.randomUUID(),
           timestamp: Date.now(),
-          read: false,
         },
         ...prev,
       ]);
