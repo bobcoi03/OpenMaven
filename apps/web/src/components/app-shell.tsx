@@ -36,10 +36,12 @@ import {
   Route,
   Shield,
   LayoutDashboard,
+  Radio,
 } from "lucide-react";
 
 const TABS = [
   { name: "Overview", href: "/overview", icon: LayoutDashboard },
+  { name: "SIGINT", href: "/sigint", icon: Radio },
   { name: "Map", href: "/map", icon: MapIcon },
   { name: "Assets", href: "/assets", icon: Crosshair },
   { name: "Decisions", href: "/decisions", icon: SlidersHorizontal },
