@@ -14,6 +14,8 @@ interface MapLayerContextValue {
   toggleHeatmap: () => void;
   showZoneControl: boolean;
   toggleZoneControl: () => void;
+  focusCoords: { lng: number; lat: number } | null;
+  setFocusCoords: (coords: { lng: number; lat: number } | null) => void;
 }
 
 const MapLayerContext = createContext<MapLayerContextValue>({
@@ -26,6 +28,8 @@ const MapLayerContext = createContext<MapLayerContextValue>({
   toggleHeatmap: () => {},
   showZoneControl: false,
   toggleZoneControl: () => {},
+  focusCoords: null,
+  setFocusCoords: () => {},
 });
 
 export function MapLayerProvider({ children }: { children: React.ReactNode }) {
@@ -35,6 +39,7 @@ export function MapLayerProvider({ children }: { children: React.ReactNode }) {
   const [selectedAsset, setSelectedAssetRaw] = useState<SimAsset | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showZoneControl, setShowZoneControl] = useState(false);
+  const [focusCoords, setFocusCoords] = useState<{ lng: number; lat: number } | null>(null);
 
   function toggleLayer(layer: AssetClass) {
     setVisibleLayers((prev) => {
@@ -61,6 +66,8 @@ export function MapLayerProvider({ children }: { children: React.ReactNode }) {
         toggleHeatmap: () => setShowHeatmap((v) => !v),
         showZoneControl,
         toggleZoneControl: () => setShowZoneControl((v) => !v),
+        focusCoords,
+        setFocusCoords,
       }}
     >
       {children}
