@@ -39,7 +39,7 @@ export function MapLayerProvider({ children }: { children: React.ReactNode }) {
   const [selectedAsset, setSelectedAssetRaw] = useState<SimAsset | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showZoneControl, setShowZoneControl] = useState(false);
-  const [focusCoords, setFocusCoords] = useState<{ lng: number; lat: number } | null>(null);
+  const [focusCoords, setFocusCoordsRaw] = useState<{ lng: number; lat: number } | null>(null);
 
   function toggleLayer(layer: AssetClass) {
     setVisibleLayers((prev) => {
@@ -52,6 +52,10 @@ export function MapLayerProvider({ children }: { children: React.ReactNode }) {
 
   const setSelectedAsset = useCallback((asset: SimAsset | null) => {
     setSelectedAssetRaw(asset);
+  }, []);
+
+  const setFocusCoords = useCallback((coords: { lng: number; lat: number } | null) => {
+    setFocusCoordsRaw(coords);
   }, []);
 
   return (

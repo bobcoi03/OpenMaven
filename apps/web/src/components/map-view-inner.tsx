@@ -111,7 +111,7 @@ export function MapViewInner({
     map.flyTo({ center: [focusCoords.lng, focusCoords.lat], zoom: 12, duration: 1000 });
     // Clear after use so the same coords can trigger again on the next click
     setFocusCoords(null);
-  }, [focusCoords, setFocusCoords]);
+  }, [focusCoords]);
 
   const markersRef = useMapMarkers(mapRef, {
     assets,
