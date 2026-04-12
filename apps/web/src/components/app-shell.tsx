@@ -9,6 +9,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { searchObjects, querySimulationStream, type QueryChatMessage, type QueryStreamEvent } from "@/lib/api-client";
+import { NotificationProvider } from "@/lib/notification-context";
+import { ToastContainer } from "@/components/toast-container";
+import { NotificationTray } from "@/components/notification-tray";
 import type { ObjectInstance } from "@/lib/api-types";
 import { MOCK_TACTICAL_ASSETS, type AssetClass } from "@/lib/tactical-mock";
 import {
@@ -474,7 +477,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <NotificationProvider>
     <div className="h-full flex flex-col bg-[var(--om-bg-deep)] text-[var(--om-text-primary)]">
+      <ToastContainer />
       {/* ── Top Bar ─────────────────────────────────────────────────── */}
       <header className="h-9 flex items-center justify-between px-3 bg-[var(--om-bg-elevated)] border-b border-[var(--om-border)] shrink-0 z-20">
         <div className="flex items-center gap-3">
@@ -503,6 +508,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
         <div className="flex items-center gap-2" ref={searchRef}>
+          <NotificationTray />
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--om-text-muted)]" />
             {isSearching && (
@@ -958,6 +964,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
     </div>
+    </NotificationProvider>
   );
 }
 
