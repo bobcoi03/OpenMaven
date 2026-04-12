@@ -478,179 +478,127 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <NotificationProvider>
-    <div className="h-full flex flex-col bg-[var(--om-bg-deep)] text-[var(--om-text-primary)]">
-      <ToastContainer />
-      {/* ── Top Bar ─────────────────────────────────────────────────── */}
-      <header className="h-9 flex items-center justify-between px-3 bg-[var(--om-bg-elevated)] border-b border-[var(--om-border)] shrink-0 z-20">
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] font-semibold text-[var(--om-text-primary)] tracking-[0.14em] uppercase">
-            OpenMaven
-          </span>
-          <div className="w-px h-4 bg-[var(--om-border)]" />
-          <nav className="flex gap-0.5">
-            {TABS.map(({ name, href, icon: Icon }) => {
-              const active = pathname === href;
-              return (
-                <Link
-                  key={name}
-                  href={href}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-sm tracking-wide transition-colors ${
-                    active
-                      ? "bg-[var(--om-blue)]/15 text-[var(--om-text-primary)] font-semibold"
-                      : "text-[var(--om-text-muted)] hover:text-[var(--om-text-primary)] font-normal"
-                  }`}
-                >
-                  <Icon size={12} />
-                  {name}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-        <div className="flex items-center gap-2" ref={searchRef}>
-          <NotificationTray />
-          <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--om-text-muted)]" />
-            {isSearching && (
-              <Loader2 size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--om-text-muted)] animate-spin" />
-            )}
-            <input
-              type="text"
-              placeholder="Search entities..."
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              onFocus={() => {
-                if (searchResults.length > 0) setShowResults(true);
-              }}
-              className="pl-7 pr-3 py-1 text-[11px] rounded-sm bg-[var(--om-bg-surface)] border border-[var(--om-border)] text-[var(--om-text-primary)] placeholder:text-[var(--om-text-disabled)] focus:outline-none focus:border-[var(--om-border-strong)] w-56"
-            />
-            {/* Search dropdown */}
-            {showResults && (
-              <div className="absolute top-full right-0 mt-1 w-80 bg-[var(--om-bg-elevated)] border border-[var(--om-border-strong)] rounded-sm shadow-xl overflow-hidden z-50">
-                {searchResults.length === 0 ? (
-                  <div className="px-3 py-4 text-center text-[11px] text-[var(--om-text-muted)]">
-                    No results for &quot;{searchQuery}&quot;
-                  </div>
-                ) : (
-                  <div className="max-h-72 overflow-y-auto">
-                    {searchResults.map((obj, i) => {
-                      const title = getTitle(obj);
-                      const color = TYPE_COLORS[obj.type.toLowerCase()] ?? "#a1a1aa";
-                      return (
-                        <button
-                          key={obj.rid}
-                          onClick={() => handleSelectResult(obj)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors cursor-pointer ${
-                            i === selectedIndex
-                              ? "bg-[var(--om-bg-active)]"
-                              : "hover:bg-[var(--om-bg-hover)]"
-                          }`}
-                        >
-                          <div
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ background: color }}
-                          />
-                          <span className="text-[11px] text-[var(--om-text-primary)] truncate flex-1">
-                            {title}
-                          </span>
-                          <span
-                            className="text-[9px] px-1.5 py-0.5 rounded-sm font-medium shrink-0"
-                            style={{ background: `${color}20`, color }}
-                          >
-                            {obj.type}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+      <div className="h-full flex flex-col bg-[var(--om-bg-deep)] text-[var(--om-text-primary)]">
+        <ToastContainer />
+        {/* ── Top Bar ─────────────────────────────────────────────────── */}
+        <header className="h-9 flex items-center justify-between px-3 bg-[var(--om-bg-elevated)] border-b border-[var(--om-border)] shrink-0 z-20">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-semibold text-[var(--om-text-primary)] tracking-[0.14em] uppercase">
+              OpenMaven
+            </span>
+            <div className="w-px h-4 bg-[var(--om-border)]" />
+            <nav className="flex gap-0.5">
+              {TABS.map(({ name, href, icon: Icon }) => {
+                const active = pathname === href;
+                return (
+                  <Link
+                    key={name}
+                    href={href}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-sm tracking-wide transition-colors ${
+                      active
+                        ? "bg-[var(--om-blue)]/15 text-[var(--om-text-primary)] font-semibold"
+                        : "text-[var(--om-text-muted)] hover:text-[var(--om-text-primary)] font-normal"
+                    }`}
+                  >
+                    <Icon size={12} />
+                    {name}
+                  </Link>
+                );
+              })}
+            </nav>
           </div>
-        </div>
-      </header>
-
-      {/* ── Main Content ────────────────────────────────────────────── */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Sidebar — Map Layers + Theatre info */}
-        <aside className="w-[240px] bg-[var(--om-bg-elevated)] border-r border-[var(--om-border)] flex flex-col shrink-0 z-10 overflow-y-auto">
-          {/* Selected asset detail (rendered at top of sidebar on /map) */}
-          {pathname === "/map" && selectedAsset && (
-            <AssetDetailPanel
-              asset={selectedAsset}
-              onClose={() => setSelectedAsset(null)}
-            />
-          )}
-
-          <div className="px-3 py-2 border-b border-[var(--om-border)]">
-            <div className="flex items-center gap-2 text-[10px] font-semibold text-[var(--om-text-primary)] uppercase tracking-[0.12em]">
-              <Layers size={11} />
-              Map Layers
+          <div className="flex items-center gap-2" ref={searchRef}>
+            <NotificationTray />
+            <div className="relative">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--om-text-muted)]" />
+              {isSearching && (
+                <Loader2 size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--om-text-muted)] animate-spin" />
+              )}
+              <input
+                type="text"
+                placeholder="Search entities..."
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                onFocus={() => {
+                  if (searchResults.length > 0) setShowResults(true);
+                }}
+                className="pl-7 pr-3 py-1 text-[11px] rounded-sm bg-[var(--om-bg-surface)] border border-[var(--om-border)] text-[var(--om-text-primary)] placeholder:text-[var(--om-text-disabled)] focus:outline-none focus:border-[var(--om-border-strong)] w-56"
+              />
+              {/* Search dropdown */}
+              {showResults && (
+                <div className="absolute top-full right-0 mt-1 w-80 bg-[var(--om-bg-elevated)] border border-[var(--om-border-strong)] rounded-sm shadow-xl overflow-hidden z-50">
+                  {searchResults.length === 0 ? (
+                    <div className="px-3 py-4 text-center text-[11px] text-[var(--om-text-muted)]">
+                      No results for &quot;{searchQuery}&quot;
+                    </div>
+                  ) : (
+                    <div className="max-h-72 overflow-y-auto">
+                      {searchResults.map((obj, i) => {
+                        const title = getTitle(obj);
+                        const color = TYPE_COLORS[obj.type.toLowerCase()] ?? "#a1a1aa";
+                        return (
+                          <button
+                            key={obj.rid}
+                            onClick={() => handleSelectResult(obj)}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors cursor-pointer ${
+                              i === selectedIndex
+                                ? "bg-[var(--om-bg-active)]"
+                                : "hover:bg-[var(--om-bg-hover)]"
+                            }`}
+                          >
+                            <div
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{ background: color }}
+                            />
+                            <span className="text-[11px] text-[var(--om-text-primary)] truncate flex-1">
+                              {title}
+                            </span>
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded-sm font-medium shrink-0"
+                              style={{ background: `${color}20`, color }}
+                            >
+                              {obj.type}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
+        </header>
 
-          {/* Layer toggles */}
-          <div className="px-2 py-2 space-y-1">
-            {LAYER_CFG.map(({ id, description }) => {
-              const isOn = visibleLayers.has(id);
-              const count = MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === id).length;
-              return (
-                <button
-                  key={id}
-                  onClick={() => toggleLayer(id)}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm transition-all cursor-pointer"
-                  style={{
-                    background: isOn ? "var(--om-bg-surface)" : "transparent",
-                    border: `1px solid ${isOn ? "var(--om-border-strong)" : "var(--om-border)"}`,
-                    opacity: isOn ? 1 : 0.45,
-                  }}
-                >
-                  {/* Toggle indicator */}
-                  <div
-                    className="w-3 h-3 rounded-sm shrink-0 flex items-center justify-center transition-all"
-                    style={{
-                      background: isOn ? "var(--om-blue)" : "transparent",
-                      border: `1.5px solid ${isOn ? "var(--om-blue)" : "var(--om-text-muted)"}`,
-                    }}
-                  >
-                    {isOn && (
-                      <svg width="7" height="5" viewBox="0 0 7 5" fill="none">
-                        <polyline points="1,2.5 3,4.5 6,1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </div>
+        {/* ── Main Content ────────────────────────────────────────────── */}
+        <div className="flex-1 flex overflow-hidden relative">
+          {/* Left Sidebar — Map Layers + Theatre info */}
+          <aside className="w-[240px] bg-[var(--om-bg-elevated)] border-r border-[var(--om-border)] flex flex-col shrink-0 z-10 overflow-y-auto">
+            {/* Selected asset detail (rendered at top of sidebar on /map) */}
+            {pathname === "/map" && selectedAsset && (
+              <AssetDetailPanel
+                asset={selectedAsset}
+                onClose={() => setSelectedAsset(null)}
+              />
+            )}
 
-                  <div className="flex-1 text-left min-w-0">
-                    <div className={`text-[11px] font-semibold truncate ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-muted)]"}`}>
-                      {id}
-                    </div>
-                    <div className="text-[9px] text-[var(--om-text-muted)]">{description}</div>
-                  </div>
-
-                  <span className={`text-[10px] shrink-0 ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-disabled)]"}`}>
-                    {count.toLocaleString()}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Overlay toggles — only on /map */}
-          {pathname === "/map" && (
-            <div className="px-2 pt-2 pb-1">
-              <div className="border-t border-[var(--om-border)] mb-2" />
-              <div className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em] px-0.5 mb-1.5">
-                Overlays
+            <div className="px-3 py-2 border-b border-[var(--om-border)]">
+              <div className="flex items-center gap-2 text-[10px] font-semibold text-[var(--om-text-primary)] uppercase tracking-[0.12em]">
+                <Layers size={11} />
+                Map Layers
               </div>
-              <div className="space-y-1">
-                {[
-                  { label: "Threat Heatmap", description: "Red-force density", isOn: showHeatmap, toggle: toggleHeatmap },
-                  { label: "Zone Control",   description: "Faction territories", isOn: showZoneControl, toggle: toggleZoneControl },
-                ].map(({ label, description, isOn, toggle }) => (
+            </div>
+
+            {/* Layer toggles */}
+            <div className="px-2 py-2 space-y-1">
+              {LAYER_CFG.map(({ id, description }) => {
+                const isOn = visibleLayers.has(id);
+                const count = MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === id).length;
+                return (
                   <button
-                    key={label}
-                    onClick={toggle}
+                    key={id}
+                    onClick={() => toggleLayer(id)}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm transition-all cursor-pointer"
                     style={{
                       background: isOn ? "var(--om-bg-surface)" : "transparent",
@@ -658,6 +606,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       opacity: isOn ? 1 : 0.45,
                     }}
                   >
+                    {/* Toggle indicator */}
                     <div
                       className="w-3 h-3 rounded-sm shrink-0 flex items-center justify-center transition-all"
                       style={{
@@ -671,298 +620,349 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         </svg>
                       )}
                     </div>
+
                     <div className="flex-1 text-left min-w-0">
                       <div className={`text-[11px] font-semibold truncate ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-muted)]"}`}>
-                        {label}
+                        {id}
                       </div>
                       <div className="text-[9px] text-[var(--om-text-muted)]">{description}</div>
                     </div>
+
+                    <span className={`text-[10px] shrink-0 ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-disabled)]"}`}>
+                      {count.toLocaleString()}
+                    </span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          )}
 
-          {/* Theatre info */}
-          <div className="mt-auto px-3 py-3 border-t border-[var(--om-border)]">
-            <div className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em] mb-2">
-              Theatre of Operations
-            </div>
-            <div className="space-y-1">
-              {[
-                ["Area",   "E. Syria / W. Iraq"],
-                ["Assets", MOCK_TACTICAL_ASSETS.length.toLocaleString()],
-                ["Lat",    "29°N – 37°N"],
-                ["Lon",    "38°E – 48°E"],
-              ].map(([k, v]) => (
-                <div key={k} className="flex items-baseline justify-between">
-                  <span className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.08em]">{k}</span>
-                  <span className="text-[9px] text-[var(--om-text-primary)]">{v}</span>
+            {/* Overlay toggles — only on /map */}
+            {pathname === "/map" && (
+              <div className="px-2 pt-2 pb-1">
+                <div className="border-t border-[var(--om-border)] mb-2" />
+                <div className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em] px-0.5 mb-1.5">
+                  Overlays
                 </div>
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        {/* Center Canvas */}
-        <main className="flex-1 flex flex-col relative min-w-0">
-          {children}
-        </main>
-
-        {/* Right Panel — AI Query */}
-        <aside className="w-[300px] bg-[var(--om-bg-elevated)] border-l border-[var(--om-border)] flex flex-col shrink-0 z-10">
-          {/* Messages area */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3">
-            {messages.length === 0 ? (
-              <div className="space-y-4 pt-2">
-                <div className="flex items-center gap-2 mb-3">
-                  <Bot size={14} className="text-[var(--om-blue)]" />
-                  <span className="text-[11px] font-semibold text-[var(--om-text-primary)]">
-                    C2 Operator
-                  </span>
-                </div>
-                <p className="text-[10px] text-[var(--om-text-secondary)] leading-[1.6]">
-                  Tactical AI assistant with live access to the simulation.
-                </p>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   {[
-                    { icon: Radar, label: "Battlefield overview", desc: "Force disposition, faction status" },
-                    { icon: Search, label: "Find & track assets", desc: "Locate units by name, type, or area" },
-                    { icon: Swords, label: "Plan & execute strikes", desc: "Weapon selection, target assessment" },
-                    { icon: Route, label: "Order movements", desc: "Reposition assets to coordinates" },
-                    { icon: Shield, label: "Faction intelligence", desc: "Doctrine, morale, capabilities" },
-                  ].map(({ icon: Icon, label, desc }) => (
-                    <div
+                    { label: "Threat Heatmap", description: "Red-force density", isOn: showHeatmap, toggle: toggleHeatmap },
+                    { label: "Zone Control",   description: "Faction territories", isOn: showZoneControl, toggle: toggleZoneControl },
+                  ].map(({ label, description, isOn, toggle }) => (
+                    <button
                       key={label}
-                      className="flex items-start gap-2.5 px-2.5 py-2 border border-[var(--om-border)] bg-[var(--om-bg-deep)]/40"
+                      onClick={toggle}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-sm transition-all cursor-pointer"
+                      style={{
+                        background: isOn ? "var(--om-bg-surface)" : "transparent",
+                        border: `1px solid ${isOn ? "var(--om-border-strong)" : "var(--om-border)"}`,
+                        opacity: isOn ? 1 : 0.45,
+                      }}
                     >
-                      <Icon size={13} className="text-[var(--om-text-secondary)] shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-medium text-[var(--om-text-primary)]">{label}</div>
-                        <div className="text-[9px] text-[var(--om-text-muted)]">{desc}</div>
+                      <div
+                        className="w-3 h-3 rounded-sm shrink-0 flex items-center justify-center transition-all"
+                        style={{
+                          background: isOn ? "var(--om-blue)" : "transparent",
+                          border: `1.5px solid ${isOn ? "var(--om-blue)" : "var(--om-text-muted)"}`,
+                        }}
+                      >
+                        {isOn && (
+                          <svg width="7" height="5" viewBox="0 0 7 5" fill="none">
+                            <polyline points="1,2.5 3,4.5 6,1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
                       </div>
-                    </div>
+                      <div className="flex-1 text-left min-w-0">
+                        <div className={`text-[11px] font-semibold truncate ${isOn ? "text-[var(--om-text-primary)]" : "text-[var(--om-text-muted)]"}`}>
+                          {label}
+                        </div>
+                        <div className="text-[9px] text-[var(--om-text-muted)]">{description}</div>
+                      </div>
+                    </button>
                   ))}
                 </div>
               </div>
-            ) : (
-              messages.map((msg, i) => (
-                <div key={i} className="flex gap-2">
-                  <div className="shrink-0 mt-0.5">
-                    {msg.role === "user" ? (
-                      <User size={12} className="text-[var(--om-text-muted)]" />
-                    ) : (
-                      <Bot size={12} className="text-[var(--om-blue)]" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    {/* Tool steps (for assistant messages) */}
-                    {msg.role === "assistant" && msg.toolSteps && msg.toolSteps.length > 0 && (
-                      <ToolStepGroup steps={msg.toolSteps} />
-                    )}
-                    <div className="text-[11px] text-[var(--om-text-primary)] leading-[1.6] break-words">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                          ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
-                          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
-                          li: ({ children }) => <li className="mb-1">{children}</li>,
-                          code: ({ children }) => (
-                            <code className="px-1 py-0.5 rounded-sm bg-[var(--om-bg-active)]/80 text-[var(--om-text-primary)]">
-                              {children}
-                            </code>
-                          ),
-                          a: ({ href, children }) => (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              className="text-[var(--om-blue-light)] hover:text-[var(--om-blue)] underline"
-                            >
-                              {children}
-                            </a>
-                          ),
-                          table: ({ children }) => (
-                            <div className="overflow-x-auto mb-2 -mx-1">
-                              <table className="w-full text-[10px] border-collapse">{children}</table>
-                            </div>
-                          ),
-                          thead: ({ children }) => (
-                            <thead className="border-b border-[var(--om-border)]">{children}</thead>
-                          ),
-                          th: ({ children }) => (
-                            <th className="px-1.5 py-1 text-left text-[8px] uppercase tracking-wider text-[var(--om-text-muted)] font-semibold">
-                              {children}
-                            </th>
-                          ),
-                          td: ({ children }) => (
-                            <td className="px-1.5 py-1 text-[var(--om-text-secondary)] border-t border-[var(--om-border)]/30">
-                              {children}
-                            </td>
-                          ),
-                        }}
-                      >
-                        {msg.content}
-                      </ReactMarkdown>
-                    </div>
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {msg.sources.map((s) => {
-                          const color = TYPE_COLORS[s.type.toLowerCase()] ?? "#a1a1aa";
-                          return (
-                            <button
-                              key={s.rid}
-                              onClick={() => {
-                                graph.seedNode(s.rid);
-                                if (pathname !== "/graph") router.push("/graph");
-                              }}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[9px] font-medium hover:opacity-80 transition-opacity cursor-pointer"
-                              style={{ background: `${color}15`, color }}
-                            >
-                              {s.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
             )}
-            {/* In-progress tool steps */}
-            {isQuerying && (
-              <div className="flex gap-2">
-                <Bot size={12} className="text-[var(--om-blue)] shrink-0 mt-0.5" />
-                <div className="min-w-0 flex-1">
-                  {toolSteps.length > 0 && (
-                    <ToolStepGroup steps={toolSteps} live />
-                  )}
-                  {thinkingText ? (
-                    <div className="mt-1 border-l-2 border-[var(--om-blue)]/30 pl-2">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Loader2 size={9} className="animate-spin text-[var(--om-blue)]/60" />
-                        <span className="text-[9px] font-medium text-[var(--om-blue)]/60 uppercase tracking-wider">Reasoning</span>
-                      </div>
-                      <div className="text-[10px] text-[var(--om-text-muted)] leading-[1.5] max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
-                        {thinkingText}
-                      </div>
-                    </div>
-                  ) : toolSteps.length === 0 ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 size={12} className="animate-spin text-[var(--om-text-muted)]" />
-                      <span className="text-[10px] text-[var(--om-text-muted)]">Thinking...</span>
-                    </div>
-                  ) : null}
-                </div>
+
+            {/* Theatre info */}
+            <div className="mt-auto px-3 py-3 border-t border-[var(--om-border)]">
+              <div className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.1em] mb-2">
+                Theatre of Operations
               </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+              <div className="space-y-1">
+                {[
+                  ["Area",   "E. Syria / W. Iraq"],
+                  ["Assets", MOCK_TACTICAL_ASSETS.length.toLocaleString()],
+                  ["Lat",    "29°N – 37°N"],
+                  ["Lon",    "38°E – 48°E"],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex items-baseline justify-between">
+                    <span className="text-[9px] text-[var(--om-text-muted)] uppercase tracking-[0.08em]">{k}</span>
+                    <span className="text-[9px] text-[var(--om-text-primary)]">{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
 
-          {/* Input */}
-          <div className="px-3 py-2.5 border-t border-[var(--om-border)]">
-            {/* Model selector */}
-            <div ref={modelMenuRef} className="relative mb-1.5">
-              <button
-                onClick={() => setModelMenuOpen((v) => !v)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-[9px] font-medium cursor-pointer transition-colors w-full"
-                style={{
-                  background: "var(--om-bg-surface)",
-                  border: "1px solid var(--om-border)",
-                  color: "var(--om-text-secondary)",
-                }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--om-green)] shrink-0" />
-                <span className="flex-1 text-left truncate">
-                  {ALL_LLM_MODELS.find((m) => m.id === selectedModel)?.label ?? selectedModel}
-                </span>
-                <ChevronDown size={9} className={`shrink-0 transition-transform ${modelMenuOpen ? "rotate-180" : ""}`} />
-              </button>
+          {/* Center Canvas */}
+          <main className="flex-1 flex flex-col relative min-w-0">
+            {children}
+          </main>
 
-              {modelMenuOpen && (
-                <div
-                  className="absolute bottom-full left-0 right-0 mb-1 rounded-sm overflow-hidden z-50"
-                  style={{
-                    background: "var(--om-bg-elevated)",
-                    border: "1px solid var(--om-border-strong)",
-                    boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-                  }}
-                >
-                  {ALL_LLM_MODELS.map((m) => {
-                    const available = availableModelIds.has(m.id);
-                    const active = selectedModel === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        disabled={!available}
-                        onClick={() => { setSelectedModel(m.id); setModelMenuOpen(false); }}
-                        className="w-full flex items-center justify-between px-2.5 py-2 text-left transition-colors"
-                        style={{ cursor: available ? "pointer" : "not-allowed", opacity: available ? 1 : 0.35 }}
-                        title={available ? undefined : `Requires ${m.provider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY"}`}
+          {/* Right Panel — AI Query */}
+          <aside className="w-[300px] bg-[var(--om-bg-elevated)] border-l border-[var(--om-border)] flex flex-col shrink-0 z-10">
+            {/* Messages area */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {messages.length === 0 ? (
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Bot size={14} className="text-[var(--om-blue)]" />
+                    <span className="text-[11px] font-semibold text-[var(--om-text-primary)]">
+                      C2 Operator
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-[var(--om-text-secondary)] leading-[1.6]">
+                    Tactical AI assistant with live access to the simulation.
+                  </p>
+                  <div className="space-y-1.5">
+                    {[
+                      { icon: Radar, label: "Battlefield overview", desc: "Force disposition, faction status" },
+                      { icon: Search, label: "Find & track assets", desc: "Locate units by name, type, or area" },
+                      { icon: Swords, label: "Plan & execute strikes", desc: "Weapon selection, target assessment" },
+                      { icon: Route, label: "Order movements", desc: "Reposition assets to coordinates" },
+                      { icon: Shield, label: "Faction intelligence", desc: "Doctrine, morale, capabilities" },
+                    ].map(({ icon: Icon, label, desc }) => (
+                      <div
+                        key={label}
+                        className="flex items-start gap-2.5 px-2.5 py-2 border border-[var(--om-border)] bg-[var(--om-bg-deep)]/40"
                       >
-                        <div>
-                          <div className={`text-[10px] font-semibold ${active ? "text-[var(--om-blue-light)]" : "text-[var(--om-text-primary)]"}`}>
-                            {m.label}
-                          </div>
-                          <div className="text-[8px] text-[var(--om-text-muted)]">{m.sub}{!available && " · Locked"}</div>
+                        <Icon size={13} className="text-[var(--om-text-secondary)] shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-medium text-[var(--om-text-primary)]">{label}</div>
+                          <div className="text-[9px] text-[var(--om-text-muted)]">{desc}</div>
                         </div>
-                        {active && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-[var(--om-blue)] shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                messages.map((msg, i) => (
+                  <div key={i} className="flex gap-2">
+                    <div className="shrink-0 mt-0.5">
+                      {msg.role === "user" ? (
+                        <User size={12} className="text-[var(--om-text-muted)]" />
+                      ) : (
+                        <Bot size={12} className="text-[var(--om-blue)]" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {/* Tool steps (for assistant messages) */}
+                      {msg.role === "assistant" && msg.toolSteps && msg.toolSteps.length > 0 && (
+                        <ToolStepGroup steps={msg.toolSteps} />
+                      )}
+                      <div className="text-[11px] text-[var(--om-text-primary)] leading-[1.6] break-words">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                            ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
+                            li: ({ children }) => <li className="mb-1">{children}</li>,
+                            code: ({ children }) => (
+                              <code className="px-1 py-0.5 rounded-sm bg-[var(--om-bg-active)]/80 text-[var(--om-text-primary)]">
+                                {children}
+                              </code>
+                            ),
+                            a: ({ href, children }) => (
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="text-[var(--om-blue-light)] hover:text-[var(--om-blue)] underline"
+                              >
+                                {children}
+                              </a>
+                            ),
+                            table: ({ children }) => (
+                              <div className="overflow-x-auto mb-2 -mx-1">
+                                <table className="w-full text-[10px] border-collapse">{children}</table>
+                              </div>
+                            ),
+                            thead: ({ children }) => (
+                              <thead className="border-b border-[var(--om-border)]">{children}</thead>
+                            ),
+                            th: ({ children }) => (
+                              <th className="px-1.5 py-1 text-left text-[8px] uppercase tracking-wider text-[var(--om-text-muted)] font-semibold">
+                                {children}
+                              </th>
+                            ),
+                            td: ({ children }) => (
+                              <td className="px-1.5 py-1 text-[var(--om-text-secondary)] border-t border-[var(--om-border)]/30">
+                                {children}
+                              </td>
+                            ),
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {msg.sources.map((s) => {
+                            const color = TYPE_COLORS[s.type.toLowerCase()] ?? "#a1a1aa";
+                            return (
+                              <button
+                                key={s.rid}
+                                onClick={() => {
+                                  graph.seedNode(s.rid);
+                                  if (pathname !== "/graph") router.push("/graph");
+                                }}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[9px] font-medium hover:opacity-80 transition-opacity cursor-pointer"
+                                style={{ background: `${color}15`, color }}
+                              >
+                                {s.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+              {/* In-progress tool steps */}
+              {isQuerying && (
+                <div className="flex gap-2">
+                  <Bot size={12} className="text-[var(--om-blue)] shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    {toolSteps.length > 0 && (
+                      <ToolStepGroup steps={toolSteps} live />
+                    )}
+                    {thinkingText ? (
+                      <div className="mt-1 border-l-2 border-[var(--om-blue)]/30 pl-2">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Loader2 size={9} className="animate-spin text-[var(--om-blue)]/60" />
+                          <span className="text-[9px] font-medium text-[var(--om-blue)]/60 uppercase tracking-wider">Reasoning</span>
+                        </div>
+                        <div className="text-[10px] text-[var(--om-text-muted)] leading-[1.5] max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                          {thinkingText}
+                        </div>
+                      </div>
+                    ) : toolSteps.length === 0 ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 size={12} className="animate-spin text-[var(--om-text-muted)]" />
+                        <span className="text-[10px] text-[var(--om-text-muted)]">Thinking...</span>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
 
-            <div className="bg-[var(--om-bg-surface)] border border-[var(--om-border)] focus-within:border-[var(--om-border-strong)] transition-colors rounded-sm">
-              <textarea
-                value={queryText}
-                onChange={(e) => setQueryText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleQuerySubmit();
-                  }
-                }}
-                placeholder="Ask about the battlefield..."
-                rows={1}
-                className="w-full px-3 pt-2 pb-1 text-[11px] text-[var(--om-text-primary)] placeholder:text-[var(--om-text-disabled)] bg-transparent border-none outline-none resize-none leading-[1.6]"
-                style={{ minHeight: "28px", maxHeight: "120px", fieldSizing: "content" } as React.CSSProperties}
-              />
-              <div className="flex justify-end px-2 pb-1.5">
+            {/* Input */}
+            <div className="px-3 py-2.5 border-t border-[var(--om-border)]">
+              {/* Model selector */}
+              <div ref={modelMenuRef} className="relative mb-1.5">
                 <button
-                  onClick={handleQuerySubmit}
-                  disabled={isQuerying || !queryText.trim()}
-                  className="p-1.5 text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] hover:bg-[var(--om-bg-hover)] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                  onClick={() => setModelMenuOpen((v) => !v)}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-[9px] font-medium cursor-pointer transition-colors w-full"
+                  style={{
+                    background: "var(--om-bg-surface)",
+                    border: "1px solid var(--om-border)",
+                    color: "var(--om-text-secondary)",
+                  }}
                 >
-                  <Send size={12} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--om-green)] shrink-0" />
+                  <span className="flex-1 text-left truncate">
+                    {ALL_LLM_MODELS.find((m) => m.id === selectedModel)?.label ?? selectedModel}
+                  </span>
+                  <ChevronDown size={9} className={`shrink-0 transition-transform ${modelMenuOpen ? "rotate-180" : ""}`} />
                 </button>
+
+                {modelMenuOpen && (
+                  <div
+                    className="absolute bottom-full left-0 right-0 mb-1 rounded-sm overflow-hidden z-50"
+                    style={{
+                      background: "var(--om-bg-elevated)",
+                      border: "1px solid var(--om-border-strong)",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+                    }}
+                  >
+                    {ALL_LLM_MODELS.map((m) => {
+                      const available = availableModelIds.has(m.id);
+                      const active = selectedModel === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          disabled={!available}
+                          onClick={() => { setSelectedModel(m.id); setModelMenuOpen(false); }}
+                          className="w-full flex items-center justify-between px-2.5 py-2 text-left transition-colors"
+                          style={{ cursor: available ? "pointer" : "not-allowed", opacity: available ? 1 : 0.35 }}
+                          title={available ? undefined : `Requires ${m.provider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY"}`}
+                        >
+                          <div>
+                            <div className={`text-[10px] font-semibold ${active ? "text-[var(--om-blue-light)]" : "text-[var(--om-text-primary)]"}`}>
+                              {m.label}
+                            </div>
+                            <div className="text-[8px] text-[var(--om-text-muted)]">{m.sub}{!available && " · Locked"}</div>
+                          </div>
+                          {active && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--om-blue)] shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-[var(--om-bg-surface)] border border-[var(--om-border)] focus-within:border-[var(--om-border-strong)] transition-colors rounded-sm">
+                <textarea
+                  value={queryText}
+                  onChange={(e) => setQueryText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleQuerySubmit();
+                    }
+                  }}
+                  placeholder="Ask about the battlefield..."
+                  rows={1}
+                  className="w-full px-3 pt-2 pb-1 text-[11px] text-[var(--om-text-primary)] placeholder:text-[var(--om-text-disabled)] bg-transparent border-none outline-none resize-none leading-[1.6]"
+                  style={{ minHeight: "28px", maxHeight: "120px", fieldSizing: "content" } as React.CSSProperties}
+                />
+                <div className="flex justify-end px-2 pb-1.5">
+                  <button
+                    onClick={handleQuerySubmit}
+                    disabled={isQuerying || !queryText.trim()}
+                    className="p-1.5 text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] hover:bg-[var(--om-bg-hover)] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                  >
+                    <Send size={12} />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </aside>
-      </div>
-
-      {/* ── Bottom Status Bar ───────────────────────────────────────── */}
-      <footer className="h-7 flex items-center gap-4 px-3 bg-[var(--om-bg-elevated)] border-t border-[var(--om-border)] shrink-0 z-20 overflow-hidden">
-        {[
-          { label: "BLUFOR", count: MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === "Military").length, color: "var(--om-friendly)" },
-          { label: "INFRA", count: MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === "Infrastructure").length, color: "var(--om-orange)" },
-          { label: "LOGI", count: MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === "Logistics").length, color: "var(--om-text-secondary)" },
-        ].map((item) => (
-          <div key={item.label} className="flex items-center gap-1.5 text-[10px] shrink-0">
-            <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: item.color }} />
-            <span className="font-semibold" style={{ color: item.color }}>{item.count}</span>
-            <span className="text-[var(--om-text-muted)]">{item.label}</span>
-          </div>
-        ))}
-        <div className="ml-auto text-[10px] text-[var(--om-text-muted)] shrink-0">
-          v0.1.0
+          </aside>
         </div>
-      </footer>
+
+        {/* ── Bottom Status Bar ───────────────────────────────────────── */}
+        <footer className="h-7 flex items-center gap-4 px-3 bg-[var(--om-bg-elevated)] border-t border-[var(--om-border)] shrink-0 z-20 overflow-hidden">
+          {[
+            { label: "BLUFOR", count: MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === "Military").length, color: "var(--om-friendly)" },
+            { label: "INFRA", count: MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === "Infrastructure").length, color: "var(--om-orange)" },
+            { label: "LOGI", count: MOCK_TACTICAL_ASSETS.filter((a) => a.asset_class === "Logistics").length, color: "var(--om-text-secondary)" },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center gap-1.5 text-[10px] shrink-0">
+              <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: item.color }} />
+              <span className="font-semibold" style={{ color: item.color }}>{item.count}</span>
+              <span className="text-[var(--om-text-muted)]">{item.label}</span>
+            </div>
+          ))}
+          <div className="ml-auto text-[10px] text-[var(--om-text-muted)] shrink-0">
+            v0.1.0
+          </div>
+        </footer>
     </div>
     </NotificationProvider>
   );
