@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNotifications } from "@/lib/notification-context";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -201,6 +202,8 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
   const [activeMissions, setActiveMissions] = useState<Record<string, MissionUpdate>>({});
   const [strikeLog, setStrikeLog] = useState<StrikeLogEntry[]>([]);
 
+  const { addNotification } = useNotifications();
+
   const wsRef = useRef<WebSocket | null>(null);
   // Keep refs to assets/tick for use inside WS message closures
   const assetsRef = useRef(assets);
@@ -377,6 +380,16 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
           dMap[d.target_id] = d;
         }
         setDetections(dMap);
+        // Emit notifications for new contacts
+        for (const d of diff.detections) {
+          addNotification({
+            severity: "blue",
+            title: "New contact",
+            body: `${d.lat.toFixed(2)}°N, ${d.lon.toFixed(2)}°E — confidence ${Math.round(d.confidence * 100)}%`,
+            assetLon: d.lon,
+            assetLat: d.lat,
+          });
+        }
       }
       if (diff.ghosts) {
         const gMap: Record<string, GhostEntry> = {};
@@ -419,6 +432,26 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
             })),
             ...prev,
           ]);
+          // Emit notifications for mission outcomes
+          for (const mu of completed) {
+            const target = currentAssets[mu.target_id];
+            if (mu.status === "complete") {
+              addNotification({
+                severity: "green",
+                title: "Target neutralized",
+                body: target ? `${target.callsign} — ${target.asset_type}` : mu.target_id,
+                assetId: mu.target_id,
+                assetLon: target?.position.longitude,
+                assetLat: target?.position.latitude,
+              });
+            } else if (mu.status === "aborted") {
+              addNotification({
+                severity: "amber",
+                title: "Mission aborted",
+                body: `Mission ${mu.mission_id.slice(0, 8)}`,
+              });
+            }
+          }
         }
 
         // Update target asset health/status from mission results
@@ -524,7 +557,7 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
       setBoardState(boardState);
       return;
     }
-  }, []);
+  }, [addNotification]);
 
   // ── Connection lifecycle ────────────────────────────────────────────
 
