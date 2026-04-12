@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useNotifications, type Notification } from "@/lib/notification-context";
@@ -21,9 +21,7 @@ const SEVERITY_LABELS: Record<Notification["severity"], string> = {
 };
 
 function Toast({ notification, onDismiss }: { notification: Notification; onDismiss: (id: string) => void }) {
-  const mapLayers = useMapLayers();
-  // setFocusCoords will be added in Task 4 — access safely
-  const setFocusCoords = (mapLayers as unknown as { setFocusCoords?: (c: { lng: number; lat: number } | null) => void }).setFocusCoords;
+  const { setFocusCoords } = useMapLayers();
   const color = SEVERITY_COLORS[notification.severity];
   const [visible, setVisible] = useState(false);
 
@@ -39,21 +37,21 @@ function Toast({ notification, onDismiss }: { notification: Notification; onDism
     return () => clearTimeout(t);
   }, [notification.id, onDismiss]);
 
+  const isLocatable = notification.assetLon !== undefined && notification.assetLat !== undefined;
+
   function handleClick() {
-    if (notification.assetLon !== undefined && notification.assetLat !== undefined) {
-      setFocusCoords?.({ lng: notification.assetLon, lat: notification.assetLat });
-    }
+    setFocusCoords({ lng: notification.assetLon!, lat: notification.assetLat! });
   }
 
   return (
     <div
-      onClick={notification.assetLon !== undefined ? handleClick : undefined}
+      onClick={isLocatable ? handleClick : undefined}
       style={{
         borderLeft: `3px solid ${color}`,
         transform: visible ? "translateX(0)" : "translateX(110%)",
         opacity: visible ? 1 : 0,
         transition: "transform 0.2s ease, opacity 0.2s ease",
-        cursor: notification.assetLon !== undefined ? "pointer" : "default",
+        cursor: isLocatable ? "pointer" : "default",
         background: "var(--om-bg-elevated)",
         border: `1px solid var(--om-border)`,
         borderLeftColor: color,
@@ -99,16 +97,16 @@ export function ToastContainer() {
   // Sync visible toasts — add new ones, keep dismissed ones until they animate out
   const shownIds = useRef(new Set<string>());
 
+  const dismiss = useCallback((id: string) => {
+    setVisible((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
   useEffect(() => {
     const newOnes = notifications.filter((n) => !shownIds.current.has(n.id));
     if (newOnes.length === 0) return;
     newOnes.forEach((n) => shownIds.current.add(n.id));
     setVisible((prev) => [...newOnes, ...prev]);
   }, [notifications]);
-
-  function dismiss(id: string) {
-    setVisible((prev) => prev.filter((n) => n.id !== id));
-  }
 
   if (!mounted) return null;
 
