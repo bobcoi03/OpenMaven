@@ -21,10 +21,12 @@ import {
   useMapHeatmap,
   useMapZoneControl,
   useMapWaypoints,
+  useMapSigintPulse,
   MAP_STYLES,
   type MapStyleId,
 } from "@/lib/map";
 import type { Waypoint } from "@/lib/use-map-waypoint-mode";
+import type { SigintIntercept } from "@/lib/use-simulation";
 import { useMapLayers } from "@/lib/map-layer-context";
 
 // Re-export for consumers
@@ -62,6 +64,8 @@ interface TacticalMapProps {
   flyTo?: { lat: number; lng: number; zoom?: number } | null;
   waypointAssetId?: string | null;
   waypoints?: Waypoint[];
+  sigintIntercepts?: SigintIntercept[];
+  showSigintPulse?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -90,6 +94,8 @@ export function MapViewInner({
   flyTo,
   waypointAssetId = null,
   waypoints = [],
+  sigintIntercepts = [],
+  showSigintPulse = true,
 }: TacticalMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -151,6 +157,11 @@ export function MapViewInner({
   useMapHeatmap(mapRef, { assets, visible: showHeatmap });
   useMapZoneControl(mapRef, { assets, visible: showZoneControl });
   useMapWaypoints(mapRef, { waypointAssetId, waypoints, assets });
+
+  useMapSigintPulse(mapRef, containerRef, {
+    sigintIntercepts,
+    showSigintPulse,
+  });
 
   return (
     <div

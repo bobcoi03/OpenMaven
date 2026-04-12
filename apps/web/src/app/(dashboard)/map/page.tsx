@@ -43,6 +43,7 @@ export default function MapPage() {
     return { lat, lng, zoom: 12 };
   }, [searchParams]);
   const [showSensorRanges, setShowSensorRanges] = useState(true);
+  const [showSigintPulse, setShowSigintPulse] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef<HTMLDivElement>(null);
   const [lockedAssetId, setLockedAssetId] = useState<string | null>(null);
@@ -373,6 +374,8 @@ export default function MapPage() {
           flyTo={flyTo}
           waypointAssetId={waypoint.waypointAssetId}
           waypoints={waypoint.waypoints}
+          sigintIntercepts={sim.sigintIntercepts}
+          showSigintPulse={showSigintPulse}
         />
 
         {/* Move-mode indicator */}
@@ -544,6 +547,22 @@ export default function MapPage() {
             }}
           >
             Sensors
+          </button>
+
+          <button
+            onClick={() => setShowSigintPulse((v) => !v)}
+            className={`px-2.5 py-1 rounded-sm text-[9px] font-semibold cursor-pointer transition-colors ${
+              showSigintPulse
+                ? "text-[var(--om-red-light)]"
+                : "text-[var(--om-text-muted)]"
+            }`}
+            style={{
+              background: "rgba(30,34,41,0.85)",
+              border: `1px solid ${showSigintPulse ? "rgba(231,106,110,0.4)" : "var(--om-border)"}`,
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            SIGINT
           </button>
 
           <div

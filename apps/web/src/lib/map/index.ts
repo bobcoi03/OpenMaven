@@ -7,3 +7,4 @@ export { useMapTargetLock } from "./use-map-target-lock";
 export { useMapHeatmap } from "./use-map-heatmap";
 export { useMapZoneControl } from "./use-map-zone-control";
 export { useMapWaypoints } from "./use-map-waypoints";
+export { useMapSigintPulse } from "./use-map-sigint-pulse";
