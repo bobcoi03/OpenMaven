@@ -39,9 +39,9 @@ function Toast({ notification, onDismiss }: { notification: Notification; onDism
 
   const isLocatable = notification.assetLon !== undefined && notification.assetLat !== undefined;
 
-  function handleClick() {
+  const handleClick = useCallback(() => {
     setFocusCoords({ lng: notification.assetLon!, lat: notification.assetLat! });
-  }
+  }, [notification.assetLon, notification.assetLat, setFocusCoords]);
 
   return (
     <div
