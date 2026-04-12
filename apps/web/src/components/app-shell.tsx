@@ -35,14 +35,12 @@ import {
   Swords,
   Route,
   Shield,
+  LayoutDashboard,
 } from "lucide-react";
 
 const TABS = [
-  // { name: "Graph", href: "/graph", icon: Network },
-  // { name: "Table", href: "/table", icon: Table },
+  { name: "Overview", href: "/overview", icon: LayoutDashboard },
   { name: "Map", href: "/map", icon: MapIcon },
-  // { name: "Query", href: "/query", icon: MessageSquare },
-  // { name: "Sources", href: "/sources", icon: FileText },
   { name: "Assets", href: "/assets", icon: Crosshair },
   { name: "Decisions", href: "/decisions", icon: SlidersHorizontal },
   { name: "Design", href: "/design", icon: Layers },
