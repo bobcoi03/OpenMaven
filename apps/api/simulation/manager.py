@@ -914,11 +914,17 @@ class SimulationManager:
             lat = params.get("latitude")
             lon = params.get("longitude")
             if asset_id and lat is not None and lon is not None:
-                self.command_move(asset_id, float(lat), float(lon))
+                try:
+                    self.command_move(asset_id, float(lat), float(lon))
+                except (ValueError, TypeError) as exc:
+                    logger.warning("ConsequenceEngine: move_asset bad coords: %s", exc)
 
         elif action == "update_morale":
             faction_id = params.get("faction_id", "")
-            severity = float(params.get("severity", 0.1))
+            try:
+                severity = float(params.get("severity", 0.1))
+            except (ValueError, TypeError):
+                severity = 0.1
             faction = self.factions.get(faction_id)
             if faction:
                 faction.apply_morale_hit(severity)
