@@ -391,3 +391,145 @@ class TestSimulationManager:
 
         radar = mgr.get_asset("radar1")
         assert radar.health < 1.0  # should be degraded
+
+
+# ── SimAsset suppression ──────────────────────────────────────────────────────
+
+
+class TestSimAssetSuppression:
+    def _asset(self) -> SimAsset:
+        return SimAsset(
+            asset_id="s1",
+            callsign="SUP-01",
+            asset_type="T-72A MBT",
+            faction_id="red",
+            position=Position(latitude=34.0, longitude=40.0),
+            speed_kmh=60,
+            max_speed_kmh=60,
+        )
+
+    def test_suppress_sets_until_tick(self):
+        a = self._asset()
+        a.suppress(10)
+        assert a.suppressed_until_tick == 10
+
+    def test_suppress_takes_max(self):
+        a = self._asset()
+        a.suppress(10)
+        a.suppress(5)   # lower — should not reduce existing suppression
+        assert a.suppressed_until_tick == 10
+        a.suppress(20)  # higher — should extend
+        assert a.suppressed_until_tick == 20
+
+    def test_is_suppressed_returns_true_during_window(self):
+        a = self._asset()
+        a.suppress(10)
+        assert a.is_suppressed(5) is True
+
+    def test_is_suppressed_returns_false_after_expiry(self):
+        a = self._asset()
+        a.suppress(10)
+        assert a.is_suppressed(10) is False  # boundary: tick == until_tick is NOT suppressed
+        assert a.is_suppressed(15) is False
+
+    def test_unsuppressed_by_default(self):
+        a = self._asset()
+        assert a.is_suppressed(0) is False
+
+
+# ── Manager suppression & CE mutations ───────────────────────────────────────
+
+
+class TestManagerSuppression:
+    def _setup(self) -> SimulationManager:
+        mgr = SimulationManager(tick_duration_s=1.0)
+        mgr.add_faction(Faction(
+            faction_id="blue",
+            name="BLUFOR",
+            side="blue",
+            doctrine=Doctrine.DEFENSIVE,
+            asset_ids=["a1"],
+        ))
+        mgr.add_faction(Faction(
+            faction_id="red",
+            name="OPFOR",
+            side="red",
+            doctrine=Doctrine.AGGRESSIVE,
+            asset_ids=["a2"],
+        ))
+        mgr.add_asset(SimAsset(
+            asset_id="a1",
+            callsign="ABRAMS-01",
+            asset_type="M1 Abrams",
+            faction_id="blue",
+            position=Position(latitude=34.0, longitude=40.0),
+            speed_kmh=65,
+            max_speed_kmh=65,
+            weapons=["hellfire"],
+        ))
+        mgr.add_asset(SimAsset(
+            asset_id="a2",
+            callsign="T72-01",
+            asset_type="T-72A MBT",
+            faction_id="red",
+            position=Position(latitude=35.0, longitude=41.0),
+            speed_kmh=60,
+            max_speed_kmh=60,
+        ))
+        return mgr
+
+    def test_strike_mission_suppresses_target_on_hit(self):
+        """A hit via _resolve_strike_mission suppresses the target for tick+5 ticks."""
+        mgr = self._setup()
+        from unittest.mock import patch
+        from simulation.rules import StrikeOutcome, StrikeResult
+        hit_result = StrikeResult(
+            hit=True,
+            destroyed=False,
+            crew_survived=True,
+            damage_percent=0.3,
+            outcome=StrikeOutcome.DAMAGED,
+            description="Hit",
+        )
+        # Use the mission-based API (creates an active mission)
+        result = mgr.command_strike_mission("a1", "hellfire", "a2")
+        assert "mission_id" in result, f"expected mission, got: {result}"
+        mission_id = result["mission_id"]
+
+        # Resolve the mission with a forced hit
+        with patch("simulation.manager.resolve_strike_by_names", return_value=hit_result):
+            mgr._resolve_strike_mission(mission_id)
+
+        target = mgr.get_asset("a2")
+        # tick is 0, suppressed_until_tick == 5 → suppressed at tick 1
+        assert target.is_suppressed(1)
+        assert not target.is_suppressed(mgr.tick + 5)
+
+    def test_apply_mutation_from_consequence_move(self):
+        """CE move_asset command updates the asset's position (uses command_move)."""
+        mgr = self._setup()
+        mgr._apply_mutation_from_consequence(
+            "move_asset",
+            {"asset_id": "a2", "latitude": 34.5, "longitude": 40.5},
+        )
+        # command_move creates a movement order; the asset is now MOVING
+        asset = mgr.get_asset("a2")
+        assert asset.status == AssetStatus.MOVING
+        assert asset.movement_order is not None
+
+    def test_apply_mutation_from_consequence_morale(self):
+        """CE update_morale command applies a morale hit to the faction."""
+        mgr = self._setup()
+        faction = mgr.get_faction("red")
+        original_morale = faction.morale
+        mgr._apply_mutation_from_consequence(
+            "update_morale",
+            {"faction_id": "red", "severity": 0.2},
+        )
+        assert faction.morale < original_morale
+
+    def test_apply_mutation_from_consequence_unknown_action_ignored(self):
+        """Unknown CE actions must not raise — they are silently discarded."""
+        mgr = self._setup()
+        # Should not raise
+        mgr._apply_mutation_from_consequence("launch_nukes", {"faction_id": "red"})
