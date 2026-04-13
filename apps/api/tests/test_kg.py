@@ -182,7 +182,9 @@ class TestExtractAndStore:
         assert links[0].link_type == "FOUNDED_BY"
 
     @pytest.mark.asyncio
-    async def test_handles_extraction_error_gracefully(self):
+    async def test_raises_when_all_chunks_fail(self):
+        """extract_and_store raises RuntimeError when every chunk fails so callers
+        can fall back to a simpler extraction pipeline."""
         from kg.extract import extract_and_store
 
         registry = _build_test_registry()
@@ -191,18 +193,15 @@ class TestExtractAndStore:
         mock_graphiti = AsyncMock()
         mock_graphiti.add_episode = AsyncMock(side_effect=RuntimeError("LLM timeout"))
 
-        result = await extract_and_store(
-            text="Some text",
-            source_id="test-source",
-            filename="test.txt",
-            registry=registry,
-            store=store,
-            graphiti=mock_graphiti,
-        )
-
-        assert result.objects_created == 0
-        assert len(result.errors) == 1
-        assert "LLM timeout" in result.errors[0]
+        with pytest.raises(RuntimeError, match="LLM timeout"):
+            await extract_and_store(
+                text="Some text",
+                source_id="test-source",
+                filename="test.txt",
+                registry=registry,
+                store=store,
+                graphiti=mock_graphiti,
+            )
 
 
 class TestFallbackWithoutApiKey:
