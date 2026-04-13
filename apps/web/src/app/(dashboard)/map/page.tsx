@@ -8,7 +8,7 @@
  */
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MapView } from "@/components/map-view";
 import { MAP_STYLES, type MapStyleId } from "@/components/map-view-inner";
 import { SimulationControls } from "@/components/simulation-controls";
@@ -28,13 +28,30 @@ import { findBestPairing, findAllPairings, refreshPairing, type PairingSelection
 export default function MapPage() {
   const router = useRouter();
   const { visibleLayers, selectedAsset, setSelectedAsset } = useMapLayers();
+  const searchParams = useSearchParams();
   const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
+
+  // Read lat/lng from URL (e.g. /map?lat=33.5&lng=42.8) for fly-to on load
+  const flyTo = useMemo(() => {
+    const lat = parseFloat(searchParams.get("lat") ?? "");
+    const lng = parseFloat(searchParams.get("lng") ?? "");
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat, lng, zoom: 12 };
+  }, [searchParams]);
   const [showSensorRanges, setShowSensorRanges] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef<HTMLDivElement>(null);
+  const [lockedAssetId, setLockedAssetId] = useState<string | null>(null);
 
   const sim = useSimulation();
   const selectedId = selectedAsset?.asset_id ?? null;
+
+  // Auto-unlock if the locked asset is destroyed
+  useEffect(() => {
+    if (!lockedAssetId) return;
+    const asset = sim.assets[lockedAssetId];
+    if (!asset || asset.status === "destroyed") setLockedAssetId(null);
+  }, [lockedAssetId, sim.assets]);
 
   // ── Derived data ────────────────────────────────────────────────────────
 
@@ -326,6 +343,8 @@ export default function MapPage() {
           strikeLines={strikeLines}
           plannedLines={plannedLines}
           movementLines={movementLines}
+          lockedAssetId={lockedAssetId}
+          flyTo={flyTo}
         />
 
         {/* Move-mode indicator */}
@@ -363,6 +382,63 @@ export default function MapPage() {
                 <span className="text-[var(--om-text-muted)] text-[9px] ml-1">ESC to cancel</span>
               </>
             )}
+          </div>
+        )}
+
+        {/* Target lock badge — shown when a target is locked */}
+        {lockedAssetId && (() => {
+          const locked = sim.assets[lockedAssetId];
+          return (
+            <div
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded-sm text-[10px] font-semibold"
+              style={{
+                background: "rgba(20,16,8,0.9)",
+                border: "1px solid rgba(255,176,0,0.5)",
+                color: "rgba(255,176,0,0.95)",
+                backdropFilter: "blur(4px)",
+                boxShadow: "0 0 12px rgba(255,176,0,0.15)",
+              }}
+            >
+              <span style={{ animation: "om-lock-blink 1s step-end infinite" }}>◎</span>
+              <span className="tracking-widest uppercase">TGT LOCKED</span>
+              <span className="opacity-50">·</span>
+              <span>{locked?.callsign ?? lockedAssetId}</span>
+              <button
+                onClick={() => setLockedAssetId(null)}
+                className="ml-1 opacity-60 hover:opacity-100 cursor-pointer transition-opacity"
+                title="Unlock target"
+              >
+                ✕
+              </button>
+            </div>
+          );
+        })()}
+
+        {/* Lock Target button — shown when an asset is selected and not yet locked */}
+        {selectedId && selectedId !== lockedAssetId && (
+          <div
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30"
+          >
+            <button
+              onClick={() => setLockedAssetId(selectedId)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[10px] font-semibold cursor-pointer transition-colors"
+              style={{
+                background: "rgba(20,16,8,0.85)",
+                border: "1px solid rgba(255,176,0,0.3)",
+                color: "rgba(255,176,0,0.7)",
+                backdropFilter: "blur(4px)",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,176,0,0.7)";
+                (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,176,0,1)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,176,0,0.3)";
+                (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,176,0,0.7)";
+              }}
+            >
+              ◎ Lock Target
+            </button>
           </div>
         )}
 

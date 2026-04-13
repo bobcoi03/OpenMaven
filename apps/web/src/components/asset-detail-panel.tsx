@@ -86,12 +86,14 @@ const SIDE_COLORS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  active: "#32A467",   // greenLt
-  moving: "#00A8DC",   // friendly
-  damaged: "#EC9A3C",  // orangeLt
-  destroyed: "#E76A6E",// redLt
-  holding: "#4C90F0",  // blueLt
-  rtb: "#E76A6E",      // redLt
+  active: "#32A467",        // greenLt
+  moving: "#00A8DC",        // friendly
+  damaged: "#EC9A3C",       // orangeLt
+  destroyed: "#E76A6E",     // redLt
+  holding: "#4C90F0",       // blueLt
+  rtb: "#E76A6E",           // redLt
+  on_mission: "#C87619",    // orange
+  suppressed_moving: "#FFA500",
 };
 
 function TelRow({ label, value, color, mono }: { label: string; value: string; color?: string; mono?: boolean }) {
@@ -126,7 +128,7 @@ export function AssetDetailPanel({
     <div className="flex flex-col border-b border-[var(--om-border)]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--om-border)]">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className="w-2 h-2 shrink-0" style={{ background: color }} />
           <span className="text-[11px] font-bold text-[var(--om-text-primary)] truncate">{asset.callsign}</span>
           <span
@@ -135,6 +137,22 @@ export function AssetDetailPanel({
           >
             {asset.status.toUpperCase()}
           </span>
+          {asset.is_suppressed && (
+            <span
+              className="text-[8px] font-bold px-1.5 py-px shrink-0 animate-pulse"
+              style={{ background: "#FFA50030", color: "#FFA500" }}
+            >
+              SUPPRESSED
+            </span>
+          )}
+          {asset.status === "rtb" && (
+            <span
+              className="text-[8px] font-bold px-1.5 py-px shrink-0"
+              style={{ background: "#E76A6E30", color: "#E76A6E" }}
+            >
+              RETREATING
+            </span>
+          )}
         </div>
         <button onClick={onClose} className="text-[var(--om-text-muted)] hover:text-[var(--om-text-secondary)] transition-colors cursor-pointer shrink-0">
           <X size={13} />
@@ -174,6 +192,9 @@ export function AssetDetailPanel({
         <TelRow label="Heading" value={`${asset.position.heading_deg.toFixed(1)}°`} />
         <TelRow label="Speed" value={`${asset.speed_kmh} km/h`} />
         <TelRow label="Health" value={`${(asset.health * 100).toFixed(0)}%`} color={asset.health > 0.5 ? "#32A467" : asset.health > 0.2 ? "#EC9A3C" : "#E76A6E"} />
+        {asset.is_suppressed && (
+          <TelRow label="Suppressed until" value={`tick ${asset.suppressed_until_tick}`} color="#FFA500" />
+        )}
         {asset.sensor_type && <TelRow label="Sensor" value={asset.sensor_type} />}
         {asset.weapons.length > 0 && <TelRow label="Weapons" value={asset.weapons.join(", ")} />}
         <TelRow label="Asset ID" value={asset.asset_id} mono />

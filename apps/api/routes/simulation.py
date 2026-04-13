@@ -90,7 +90,7 @@ async def simulation_websocket(ws: WebSocket) -> None:
     try:
         while True:
             message = await ws.receive_json()
-            response = _handle_ws_message(sim, message)
+            response = await _handle_ws_message(sim, message)
             if response:
                 await ws.send_json(response)
     except WebSocketDisconnect:
@@ -99,7 +99,7 @@ async def simulation_websocket(ws: WebSocket) -> None:
         ws_mgr.disconnect(ws)
 
 
-def _handle_ws_message(sim, message: dict) -> dict[str, Any] | None:
+async def _handle_ws_message(sim, message: dict) -> dict[str, Any] | None:
     """Process a WebSocket command from a client."""
     msg_type = message.get("type", "")
 
@@ -128,6 +128,7 @@ def _handle_ws_message(sim, message: dict) -> dict[str, Any] | None:
             message.get("weapon_id", ""),
             message.get("target_id", ""),
         )
+        await sim._broadcast_board()
         return {
             "type": "strike_mission_result",
             "data": {
@@ -141,6 +142,26 @@ def _handle_ws_message(sim, message: dict) -> dict[str, Any] | None:
     if msg_type == "abort_mission":
         result = sim.command_abort_mission(message.get("mission_id", ""))
         return {"type": "abort_mission_result", "data": result}
+
+    if msg_type == "advance_target":
+        from detection.targeting_board import advance_target
+        target_id = message.get("target_id", "")
+        sim.targeting_board = advance_target(target_id, sim.targeting_board)
+        await sim._broadcast_board()
+        return {"type": "advance_target_result", "target_id": target_id}
+
+    if msg_type == "set_target_stage":
+        from detection.targeting_board import set_target_stage
+        from detection.models import TargetStage
+        target_id = message.get("target_id", "")
+        stage_str = message.get("stage", "")
+        try:
+            stage = TargetStage(stage_str)
+        except ValueError:
+            return {"type": "error", "message": f"Invalid stage: {stage_str}"}
+        sim.targeting_board = set_target_stage(target_id, stage, sim.targeting_board)
+        await sim._broadcast_board()
+        return {"type": "set_target_stage_result", "target_id": target_id, "stage": stage_str}
 
     if msg_type == "get_state":
         return {"type": "snapshot", "data": sim.get_snapshot()}

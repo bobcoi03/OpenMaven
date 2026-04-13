@@ -36,6 +36,8 @@ interface UseMapInitOptions {
   mapStyle: MapStyleId;
   onContextMenu?: (event: { lng: number; lat: number; x: number; y: number }) => void;
   onClick?: (lngLat: { lng: number; lat: number }) => void;
+  /** Fly to this location after map loads. */
+  flyTo?: { lat: number; lng: number; zoom?: number } | null;
 }
 
 export function useMapInit(
@@ -86,11 +88,40 @@ export function useMapInit(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch style
+  // Fly to a target location when specified
+  const flyToRef = useRef(options.flyTo);
+  flyToRef.current = options.flyTo;
+  const hasFiredFlyTo = useRef(false);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const target = flyToRef.current;
+    if (!map || !target || hasFiredFlyTo.current) return;
+
+    const doFly = () => {
+      hasFiredFlyTo.current = true;
+      map.flyTo({ center: [target.lng, target.lat], zoom: target.zoom ?? 12, duration: 1500 });
+    };
+
+    if (map.loaded()) {
+      doFly();
+    } else {
+      map.once("load", doFly);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Switch style — wait for any in-flight style load to finish first
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.setStyle(resolvedStyle);
+    if (map.isStyleLoaded()) {
+      map.setStyle(resolvedStyle);
+    } else {
+      const onLoad = () => map.setStyle(resolvedStyle);
+      map.once("load", onLoad);
+      return () => map.off("load", onLoad);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options.mapStyle]);
 

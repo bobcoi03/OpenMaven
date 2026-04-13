@@ -1,23 +1,34 @@
 """Tests for object, graph, and search endpoints."""
 
-from pathlib import Path
-
+import pytest
 from fastapi.testclient import TestClient
 
 from dependencies import store, SEED_PATH
-
-# Ensure seed data is loaded for these tests
-if not store.list_objects():
-    store.load_seed(SEED_PATH)
-
 from main import app
 
 client = TestClient(app)
 
-# Grab a known company RID from the seed data for targeted tests
-_first_company = store.list_objects(type_filter="Company")[0]
-_COMPANY_RID = _first_company.rid
-_COMPANY_NAME = _first_company.properties["name"]
+
+@pytest.fixture(autouse=True, scope="module")
+def ensure_seed_data():
+    """Reload seed data before this module's tests run.
+
+    test_neo4j_store.py wipes Neo4j with DETACH DELETE in its teardown, so we
+    cannot rely on data loaded at import time surviving until test execution.
+    """
+    if not store.list_objects():
+        store.load_seed(SEED_PATH)
+
+
+# Grab a known company RID from the seed data for targeted tests.
+# This runs after the module fixture populates the store.
+def _get_company():
+    objects = store.list_objects(type_filter="Company")
+    if not objects:
+        # Seed on first access if somehow still empty (e.g. fresh run)
+        store.load_seed(SEED_PATH)
+        objects = store.list_objects(type_filter="Company")
+    return objects[0]
 
 
 def test_list_all_objects():
@@ -35,11 +46,12 @@ def test_filter_objects_by_type():
 
 
 def test_get_single_object():
-    response = client.get(f"/api/objects/{_COMPANY_RID}")
+    company = _get_company()
+    response = client.get(f"/api/objects/{company.rid}")
     assert response.status_code == 200
     obj = response.json()
-    assert obj["rid"] == _COMPANY_RID
-    assert obj["properties"]["name"] == _COMPANY_NAME
+    assert obj["rid"] == company.rid
+    assert obj["properties"]["name"] == company.properties["name"]
 
 
 def test_get_object_not_found():
@@ -48,7 +60,8 @@ def test_get_object_not_found():
 
 
 def test_get_object_links():
-    response = client.get(f"/api/objects/{_COMPANY_RID}/links")
+    company = _get_company()
+    response = client.get(f"/api/objects/{company.rid}/links")
     assert response.status_code == 200
     links = response.json()
     link_types = {link["link_type"] for link in links}
@@ -75,10 +88,11 @@ def test_graph_filter_by_type():
 
 
 def test_search_by_name():
-    response = client.get(f"/api/search?q={_COMPANY_NAME[:6]}")
+    company = _get_company()
+    response = client.get(f"/api/search?q={company.properties['name'][:6]}")
     results = response.json()
     assert len(results) >= 1
-    assert any(r["properties"]["name"] == _COMPANY_NAME for r in results)
+    assert any(r["properties"]["name"] == company.properties["name"] for r in results)
 
 
 def test_search_by_tag():

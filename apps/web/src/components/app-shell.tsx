@@ -101,6 +101,10 @@ const TOOL_LABELS: Record<string, { running: string; done: string }> = {
   get_active_missions: { running: "Checking active missions...", done: "Missions loaded" },
   abort_mission: { running: "Aborting mission...", done: "Mission aborted" },
   plan_multi_strike: { running: "Planning multi-target strike...", done: "Strike plan ready" },
+  get_detected_contacts: { running: "Checking sensor contacts...", done: "Contacts loaded" },
+  get_ghost_contacts: { running: "Checking lost contacts...", done: "Ghosts loaded" },
+  query_weapon_effectiveness: { running: "Analyzing weapon effectiveness...", done: "Effectiveness calculated" },
+  calculate_travel_time: { running: "Calculating travel time...", done: "Travel time calculated" },
   get_schema: { running: "Fetching schema...", done: "Fetched schema" },
   run_cypher: { running: "Running query...", done: "Query complete" },
   search_entities: { running: "Searching entities...", done: "Found entities" },
@@ -227,6 +231,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isQuerying, setIsQuerying] = useState(false);
   const [toolSteps, setToolSteps] = useState<ToolStep[]>([]);
+  const [thinkingText, setThinkingText] = useState("");
   const toolStepsRef = useRef<ToolStep[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -315,6 +320,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setMessages(nextMessages);
     setIsQuerying(true);
     setToolSteps([]);
+    setThinkingText("");
 
     const streamFn = querySimulationStream;
 
@@ -323,6 +329,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     try {
       await streamFn(question, nextChatForApi, (event: QueryStreamEvent) => {
         if (event.type === "tool_call") {
+          setThinkingText("");
           setToolSteps((prev) => [
             ...prev,
             {
@@ -348,7 +355,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           );
           return;
         }
+        if (event.type === "thinking_delta") {
+          setThinkingText((prev) => prev + event.content);
+          return;
+        }
         if (event.type === "text_delta") {
+          // Clear thinking once real content starts
+          setThinkingText("");
           streamingText += event.content;
           // Show partial text as a streaming message
           const partial = streamingText;
@@ -726,14 +739,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="flex gap-2">
                 <Bot size={12} className="text-[var(--om-blue)] shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
-                  {toolSteps.length > 0 ? (
+                  {toolSteps.length > 0 && (
                     <ToolStepGroup steps={toolSteps} live />
-                  ) : (
+                  )}
+                  {thinkingText ? (
+                    <div className="mt-1 border-l-2 border-[var(--om-blue)]/30 pl-2">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Loader2 size={9} className="animate-spin text-[var(--om-blue)]/60" />
+                        <span className="text-[9px] font-medium text-[var(--om-blue)]/60 uppercase tracking-wider">Reasoning</span>
+                      </div>
+                      <div className="text-[10px] text-[var(--om-text-muted)] leading-[1.5] max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                        {thinkingText}
+                      </div>
+                    </div>
+                  ) : toolSteps.length === 0 ? (
                     <div className="flex items-center gap-2">
                       <Loader2 size={12} className="animate-spin text-[var(--om-text-muted)]" />
                       <span className="text-[10px] text-[var(--om-text-muted)]">Thinking...</span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             )}

@@ -13,6 +13,9 @@ load_dotenv(override=True)
 from ontology.registry import OntologyRegistry
 from store.base import BaseStore
 
+# Path to the default seed data file used by tests and the MemoryStore bootstrap.
+SEED_PATH: Path = Path(__file__).parent / "data" / "seed" / "yc-seed.json"
+
 logger = logging.getLogger(__name__)
 
 
@@ -63,3 +66,35 @@ def _build_simulation():
 
 
 sim_manager, ws_manager = _build_simulation()
+
+
+# ── LLM client ───────────────────────────────────────────────────────────────
+
+LLM_MODEL: str = os.environ.get("LLM_MODEL", "google/gemini-2.5-pro")
+
+
+def get_llm_client():
+    """Create an OpenAI-compatible client using OpenRouter (or direct OpenAI).
+
+    Reads from env:
+      OPENROUTER_API_KEY — preferred, uses OpenRouter as gateway
+      OPENAI_API_KEY     — fallback, direct OpenAI
+    """
+    from openai import OpenAI
+
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    if openrouter_key:
+        return OpenAI(
+            api_key=openrouter_key,
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "https://github.com/bobcoi03/OpenMaven",
+                "X-Title": "OpenMaven",
+            },
+        )
+
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if openai_key:
+        return OpenAI(api_key=openai_key)
+
+    return None

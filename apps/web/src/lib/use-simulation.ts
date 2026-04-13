@@ -35,6 +35,10 @@ export interface SimAsset {
   sensor_range_km: number;
   weapons: string[];
   movement_order: SimMovementOrder | null;
+  /** Tick until which this asset is suppressed (cannot fire, movement paused). */
+  suppressed_until_tick?: number;
+  /** Derived: true when suppressed_until_tick > current tick. Updated each diff. */
+  is_suppressed?: boolean;
 }
 
 export interface SimFaction {
@@ -171,6 +175,10 @@ interface UseSimulationReturn {
   abortMission: (missionId: string) => void;
   /** Move an asset */
   moveAsset: (assetId: string, lat: number, lon: number) => void;
+  /** Advance a target one stage forward on the targeting board */
+  advanceTarget: (targetId: string) => void;
+  /** Set a target to a specific stage (for drag-and-drop) */
+  setTargetStage: (targetId: string, stage: string) => void;
   /** Request full state refresh */
   refresh: () => void;
 }
@@ -228,6 +236,14 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
     send({ type: "move", asset_id: assetId, latitude: lat, longitude: lon });
   }, [send]);
 
+  const advanceTarget = useCallback((targetId: string) => {
+    send({ type: "advance_target", target_id: targetId });
+  }, [send]);
+
+  const setTargetStage = useCallback((targetId: string, stage: string) => {
+    send({ type: "set_target_stage", target_id: targetId, stage });
+  }, [send]);
+
   const refresh = useCallback(() => {
     send({ type: "get_state" });
   }, [send]);
@@ -241,7 +257,13 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
       const data = msg.data;
       setTick(data.tick);
       setSpeedState(data.speed);
-      setAssets(data.assets);
+      // Compute is_suppressed from snapshot tick so reconnects show correct state
+      const snapshotTick = data.tick as number;
+      const hydratedAssets = data.assets as Record<string, SimAsset>;
+      for (const asset of Object.values(hydratedAssets)) {
+        asset.is_suppressed = (asset.suppressed_until_tick ?? 0) > snapshotTick;
+      }
+      setAssets(hydratedAssets);
       setFactions(data.factions);
       setPendingEvents(data.pending_events);
       // Active missions from snapshot
@@ -281,30 +303,70 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
       const diff: StateDiff = msg.data ?? msg;
       setTick(diff.tick);
 
-      // Patch asset positions from diff
-      if (diff.asset_updates?.length > 0) {
-        setAssets((prev) => {
-          const next = { ...prev };
+      // Patch asset state from diff
+      setAssets((prev) => {
+        let next = prev;
+
+        // Apply per-asset updates from this diff
+        if (diff.asset_updates?.length > 0) {
           for (const update of diff.asset_updates) {
             const id = update.asset_id as string;
-            if (id && next[id] && update.position) {
-              const event = update.event as string | undefined;
-              let status = next[id].status;
-              // Never overwrite destroyed status
-              if (status !== "destroyed") {
-                if (event === "arrived") status = "active";
-                else if (event === "moving") status = "moving";
+            if (!id || !next[id]) continue;
+            const current = next[id];
+            if (current.status === "destroyed") continue; // never touch destroyed assets
+
+            const event = update.event as string | undefined;
+            const patch: Partial<SimAsset> = {};
+
+            // Position
+            if (update.position) patch.position = update.position as SimPosition;
+
+            // Status — map event type to sim status
+            if (current.status !== "destroyed") {
+              if (event === "arrived")            patch.status = "active";
+              else if (event === "moving")        patch.status = "moving";
+              else if (event === "suppressed_moving") patch.status = "moving";
+              else if (event === "retreating")    patch.status = "rtb";
+              else if (event === "reinforcing")   patch.status = "moving";
+              else if (event === "damaged_by_red") {
+                const s = update.status as string | undefined;
+                if (s) patch.status = s;
               }
-              next[id] = {
-                ...next[id],
-                position: update.position as SimPosition,
-                status,
-              };
+            }
+
+            // Health
+            if (update.health !== undefined) patch.health = update.health as number;
+
+            // Suppression — set or clear based on tick data in the update
+            const sut = update.suppressed_until_tick as number | undefined;
+            if (sut !== undefined) {
+              patch.suppressed_until_tick = sut;
+              patch.is_suppressed = sut > diff.tick;
+            } else if (event === "suppressed_moving") {
+              patch.is_suppressed = true;
+            } else if (event === "moving" || event === "arrived") {
+              // Normal movement resumed — suppression has lifted
+              patch.is_suppressed = false;
+            }
+
+            if (Object.keys(patch).length > 0) {
+              if (next === prev) next = { ...prev };
+              next[id] = { ...current, ...patch };
             }
           }
-          return next;
-        });
-      }
+        }
+
+        // Clear expired suppressions for any asset not updated this diff
+        // (handles static assets that don't receive movement events)
+        for (const [id, asset] of Object.entries(next)) {
+          if (asset.is_suppressed && (asset.suppressed_until_tick ?? 0) <= diff.tick) {
+            if (next === prev) next = { ...prev };
+            next[id] = { ...asset, is_suppressed: false };
+          }
+        }
+
+        return next;
+      });
 
       // Fog of war updates
       if (diff.detections) {
@@ -481,6 +543,8 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
     strikeMission,
     abortMission,
     moveAsset,
+    advanceTarget,
+    setTargetStage,
     refresh,
   };
 }

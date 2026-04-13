@@ -52,9 +52,19 @@ class SimAsset(BaseModel):
     sensor_range_km: float = 0.0
     weapons: list[str] = Field(default_factory=list)
     movement_order: MovementOrder | None = None
+    # Suppression: asset cannot fire while suppressed_until_tick > current tick
+    suppressed_until_tick: int = 0
 
     def is_alive(self) -> bool:
         return self.status != AssetStatus.DESTROYED
+
+    def is_suppressed(self, current_tick: int) -> bool:
+        """True while the asset is suppressed (cannot fire, reduced speed)."""
+        return current_tick < self.suppressed_until_tick
+
+    def suppress(self, until_tick: int) -> None:
+        """Apply suppression through *until_tick* (inclusive). Extends if already suppressed."""
+        self.suppressed_until_tick = max(self.suppressed_until_tick, until_tick)
 
     def apply_damage(self, damage_percent: float) -> None:
         """Reduce health. If health hits 0, mark destroyed."""

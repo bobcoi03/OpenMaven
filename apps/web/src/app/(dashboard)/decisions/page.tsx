@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle, Plus, Search, Filter, ArrowUpDown,
   Layers, ChevronLeft, ChevronRight, LayoutGrid, List,
-  ChevronDown, Bell, Flag, Check, X,
+  ChevronDown, Bell, Flag, Check, X, MapPin,
 } from "lucide-react";
 import { useSimulation, type DetectionTarget } from "@/lib/use-simulation";
 
@@ -110,6 +110,14 @@ function timeAgo(iso: string): string {
 }
 function isExpired(iso: string): boolean {
   return Date.now() - new Date(iso).getTime() > 10 * 60_000;
+}
+function shortGrid(grid: string): string {
+  // MGRS like "37SEV0023271933" → "37S EV 002 193"
+  const m = grid.match(/^(\d{1,2}[A-Z])([A-Z]{2})(\d+)$/);
+  if (!m) return grid.slice(0, 12);
+  const digits = m[3];
+  const half = Math.floor(digits.length / 2);
+  return `${m[1]} ${m[2]} ${digits.slice(0, Math.min(half, 3))} ${digits.slice(half, half + Math.min(half, 3))}`;
 }
 function applyConfFilter(t: DetectionTarget, f: FilterConf): boolean {
   const c = t.detection.confidence;
@@ -241,11 +249,59 @@ function TBtn({
   );
 }
 
+// ── Skeleton card ────────────────────────────────────────────────────────────
+function SkeletonCard() {
+  return (
+    <div style={{
+      background: T.bgElevated,
+      border: `1px solid ${T.border}`,
+      borderRadius: 3,
+      padding: "8px 10px 6px",
+    }}>
+      {/* Row 1: name + badge */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="skeleton-pulse" style={{ width: 7, height: 7, borderRadius: 1, background: T.bgHover }} />
+        <div className="skeleton-pulse" style={{ flex: 1, height: 12, borderRadius: 2, background: T.bgHover }} />
+        <div className="skeleton-pulse" style={{ width: 32, height: 16, borderRadius: 2, background: T.bgHover }} />
+      </div>
+      {/* Row 2: track + grid */}
+      <div className="flex items-center gap-2 mb-2" style={{ paddingLeft: 15 }}>
+        <div className="skeleton-pulse" style={{ width: 42, height: 9, borderRadius: 2, background: T.bgHover }} />
+        <div className="skeleton-pulse" style={{ width: 72, height: 9, borderRadius: 2, background: T.bgHover }} />
+      </div>
+      {/* Row 3: tags */}
+      <div className="flex items-center gap-1.5 mb-2" style={{ paddingLeft: 15 }}>
+        <div className="skeleton-pulse" style={{ width: 38, height: 15, borderRadius: 2, background: T.bgHover }} />
+      </div>
+      {/* Footer */}
+      <div className="flex items-center justify-between" style={{ paddingTop: 4, borderTop: `1px solid ${T.border}` }}>
+        <div className="skeleton-pulse" style={{ width: 48, height: 9, borderRadius: 2, background: T.bgHover }} />
+        <div className="skeleton-pulse" style={{ width: 9, height: 9, borderRadius: 2, background: T.bgHover }} />
+      </div>
+      <style>{`
+        @keyframes skeleton-pulse {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.15; }
+        }
+        .skeleton-pulse {
+          animation: skeleton-pulse 1.8s ease-in-out infinite;
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function DecisionsPage() {
   const router = useRouter();
   const sim    = useSimulation();
   const board  = sim.boardState ?? [];
+  const [loading, setLoading] = useState(true);
+
+  // Clear loading once we actually receive targets on the board
+  useEffect(() => {
+    if (board.length > 0) setLoading(false);
+  }, [board]);
 
   // Local targets added via + Add form
   const [localTargets, setLocalTargets] = useState<DetectionTarget[]>([]);
@@ -265,6 +321,7 @@ export default function DecisionsPage() {
   const [visibleStages,   setVisibleStages]   = useState<Set<Stage>>(new Set(STAGE_ORDER));
   const [flaggedIds,      setFlaggedIds]      = useState<Set<string>>(new Set());
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
+  const [dragOverColumn,  setDragOverColumn]  = useState<string | null>(null);
 
   // Which dropdown is open (only one at a time)
   const [openDrop, setOpenDrop] = useState<DropdownName | null>(null);
@@ -374,9 +431,15 @@ export default function DecisionsPage() {
   }, [groupBy, filteredTargets, visibleStages, allTargets]);
 
   const handleCardClick = useCallback(
-    (t: DetectionTarget) =>
-      router.push(`/map?lat=${encodeURIComponent(t.detection.lat)}&lng=${encodeURIComponent(t.detection.lon)}`),
-    [router],
+    (t: DetectionTarget) => {
+      // Use live position from current detections or sim assets, fall back to stale detection coords
+      const liveDetection = sim.detections[t.detection.asset_id];
+      const liveAsset = sim.assets[t.detection.asset_id];
+      const lat = liveDetection?.lat ?? liveAsset?.position.latitude ?? t.detection.lat;
+      const lng = liveDetection?.lon ?? liveAsset?.position.longitude ?? t.detection.lon;
+      router.push(`/map?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`);
+    },
+    [router, sim.detections, sim.assets],
   );
 
   function toggleFlag(id: string) {
@@ -723,39 +786,49 @@ export default function DecisionsPage() {
 
       {/* ── Board view ───────────────────────────────────────────────────────── */}
       {viewMode === "board" && (
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-2">
-          <div className="flex h-full gap-1.5 min-w-max">
-            {columns.map(col => (
+        <div className="flex-1 overflow-hidden p-2">
+          <div className="flex h-full gap-1.5">
+            {columns.map(col => {
+              const isDragTarget = groupBy === "stage" && dragOverColumn === col.key;
+              return (
               <div
                 key={col.key}
-                className="flex flex-col"
+                className="flex flex-col flex-1 min-w-0"
+                onDragOver={groupBy === "stage" ? (e) => { e.preventDefault(); setDragOverColumn(col.key); } : undefined}
+                onDragLeave={groupBy === "stage" ? () => setDragOverColumn(null) : undefined}
+                onDrop={groupBy === "stage" ? (e) => {
+                  e.preventDefault();
+                  setDragOverColumn(null);
+                  const targetId = e.dataTransfer.getData("text/target-id");
+                  if (targetId) sim.setTargetStage(targetId, col.key);
+                } : undefined}
                 style={{
-                  width: 210,
-                  background: T.bgPrimary,
-                  border: `1px solid ${T.border}`,
-                  borderTop: `2px solid ${col.color}55`,
+                  background: isDragTarget ? T.bgElevated : T.bgPrimary,
+                  border: isDragTarget ? `1px solid ${col.color}88` : `1px solid ${T.border}`,
+                  borderTop: `2px solid ${isDragTarget ? col.color : col.color + "55"}`,
                   borderRadius: 2,
+                  transition: "background 0.15s, border-color 0.15s",
                 }}
               >
                 {/* Column header */}
                 <div
-                  className="flex items-center gap-2 px-2.5 shrink-0"
-                  style={{ height: 32, background: T.bgElevated, borderBottom: `1px solid ${T.border}` }}
+                  className="flex items-center gap-1 px-1.5 shrink-0"
+                  style={{ height: 24, background: T.bgElevated, borderBottom: `1px solid ${T.border}` }}
                 >
-                  <div style={{ width: 7, height: 7, background: col.color, borderRadius: 1, flexShrink: 0 }} />
-                  <span className="flex-1 font-bold uppercase" style={{ fontSize: 10, color: T.textPrimary, letterSpacing: "0.1em" }}>
+                  <div style={{ width: 5, height: 5, background: col.color, borderRadius: 1, flexShrink: 0 }} />
+                  <span className="flex-1 font-bold uppercase" style={{ fontSize: 8, color: T.textPrimary, letterSpacing: "0.06em" }}>
                     {col.label}
                   </span>
-                  <span className="font-mono" style={{ fontSize: 10, color: T.textMuted, background: T.bgDeep, padding: "1px 5px", borderRadius: 2, border: `1px solid ${T.border}` }}>
+                  <span className="font-mono" style={{ fontSize: 8, color: T.textMuted, background: T.bgDeep, padding: "0px 3px", borderRadius: 2, lineHeight: "14px" }}>
                     {col.targets.length}
                   </span>
-                  <button style={{ color: T.textDisabled, padding: 2, lineHeight: 1 }}><ChevronLeft size={10} /></button>
-                  <button style={{ color: T.textDisabled, padding: 2, lineHeight: 1 }}><ChevronRight size={10} /></button>
                 </div>
 
                 {/* Cards */}
-                <div className="flex-1 overflow-y-auto px-1.5 py-1.5 space-y-1.5">
-                  {col.targets.length === 0 ? (
+                <div className="flex-1 overflow-y-auto px-1 py-1 space-y-1">
+                  {loading ? (
+                    <>{Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}</>
+                  ) : col.targets.length === 0 ? (
                     <div className="flex items-center justify-center" style={{ height: 44, fontSize: 10, color: T.textDisabled }}>
                       {isFiltered ? "No matches" : "No items"}
                     </div>
@@ -764,67 +837,92 @@ export default function DecisionsPage() {
                     const expired = isExpired(t.created_at);
                     const isFlagged = flaggedIds.has(t.target_id);
                     const isFlash   = flashing.has(t.target_id);
+                    const conf      = Math.round(t.detection.confidence);
+                    const confColor = conf >= 85 ? T.greenLt : conf >= 60 ? T.orangeLt : T.redLt;
+                    const srcColor  = SOURCE_COLOR[t.detection.source_label] ?? T.textMuted;
 
                     return (
                       <div
                         key={t.target_id}
-                        className={`relative${isFlash ? " card-flash" : ""}`}
+                        draggable={groupBy === "stage"}
+                        onDragStart={groupBy === "stage" ? (e) => {
+                          e.dataTransfer.setData("text/target-id", t.target_id);
+                          e.dataTransfer.effectAllowed = "move";
+                        } : undefined}
+                        onClick={() => handleCardClick(t)}
+                        className={`relative hover:brightness-110 transition-[filter] duration-150${isFlash ? " card-flash" : ""}`}
                         style={{
                           background: col.cardBg,
                           border: isFlash ? `1px solid rgba(250,204,21,0.6)` : `1px solid ${T.borderStrong}`,
                           borderRadius: 2,
-                          padding: cardPad,
+                          padding: "4px 5px 3px",
+                          cursor: "pointer",
                         }}
                       >
                         {/* Flagged indicator strip */}
                         {isFlagged && (
-                          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: T.gold, borderRadius: "2px 0 0 2px" }} />
+                          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: T.gold, borderRadius: "3px 0 0 3px" }} />
                         )}
 
-                        {expired && (
-                          <p style={{ fontSize: 9, color: T.orangeLt, marginBottom: 5, letterSpacing: "0.02em" }}>
-                            Time on target is expired
-                          </p>
-                        )}
+                        {/* Row 1: Asset type + confidence */}
+                        <div className="flex items-start gap-1 mb-0.5">
+                          <div style={{ width: 5, height: 5, background: T.hostile, transform: "rotate(45deg)", flexShrink: 0, marginTop: 2 }} />
+                          <span className="flex-1 min-w-0" style={{ fontSize: 9, color: T.textPrimary, fontWeight: 700, lineHeight: "12px" }}>
+                            {t.detection.asset_type}
+                          </span>
+                          <span className="font-mono shrink-0" style={{
+                            fontSize: 8, fontWeight: 700, color: confColor,
+                            background: `${confColor}18`,
+                            borderRadius: 2, padding: "0px 3px", lineHeight: "12px",
+                          }}>
+                            {conf}%
+                          </span>
+                        </div>
 
-                        <button
-                          type="button"
-                          onClick={() => handleCardClick(t)}
-                          className="w-full text-left hover:brightness-110 transition-[filter] duration-150 focus:outline-none"
-                        >
-                          <div className="flex items-start gap-1.5 mb-1.5">
-                            <div style={{ width: 8, height: 8, background: T.hostile, transform: "rotate(45deg)", flexShrink: 0, marginTop: 3 }} />
-                            <div className="min-w-0 flex-1">
-                              <span className="font-mono font-bold" style={{ fontSize: cardFontSize, color: T.textPrimary, letterSpacing: "0.05em", marginRight: 5 }}>
-                                {trackId}
-                              </span>
-                              <span style={{ fontSize: cardFontSize, color: T.textPrimary, fontWeight: 600 }}>
-                                {t.detection.asset_type}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div style={{ paddingLeft: 14, marginBottom: 2 }}>
-                            <span style={{ fontSize: 9, color: T.textMuted }}>{t.detection.classification}</span>
-                          </div>
-                          <div style={{ paddingLeft: 14, marginBottom: viewDensity === "compact" ? 4 : 6 }}>
-                            <span style={{ fontSize: 9, color: T.textDisabled, fontFamily: "var(--font-mono)" }}>{t.detection.grid_ref}</span>
-                          </div>
-                        </button>
+                        {/* Row 2: Tags */}
+                        <div className="flex flex-wrap items-center gap-0.5 mb-0.5" style={{ paddingLeft: 10 }}>
+                          <span className="font-mono" style={{ fontSize: 7, color: T.textDisabled }}>
+                            {trackId}
+                          </span>
+                          <span style={{
+                            fontSize: 7, fontWeight: 600, color: srcColor,
+                            background: `${srcColor}15`,
+                            borderRadius: 1, padding: "0px 2px", lineHeight: "11px",
+                          }}>
+                            {t.detection.source_label}
+                          </span>
+                          {t.detection.classification !== "UNCLASSIFIED" && (
+                            <span style={{
+                              fontSize: 7, color: T.textMuted,
+                              background: T.bgSurface,
+                              borderRadius: 1, padding: "0px 2px", lineHeight: "11px",
+                            }}>
+                              {t.detection.classification}
+                            </span>
+                          )}
+                          {expired && (
+                            <span style={{
+                              fontSize: 7, fontWeight: 600, color: T.orangeLt,
+                              borderRadius: 1, padding: "0px 2px", lineHeight: "11px",
+                            }}>
+                              EXP
+                            </span>
+                          )}
+                        </div>
 
                         {/* Footer */}
-                        <div className="flex items-center justify-between" style={{ paddingTop: 4, borderTop: `1px solid ${T.border}` }}>
-                          <span style={{ fontSize: 9, color: T.textMuted }}>Last edited {timeAgo(t.updated_at)}</span>
-                          <div className="flex items-center gap-1.5">
-                            {(t.detection.confidence < 70 || expired) && (
-                              <AlertTriangle size={10} style={{ color: T.gold }} />
+                        <div className="flex items-center justify-between" style={{ paddingTop: 2, borderTop: `1px solid ${T.border}` }}>
+                          <span style={{ fontSize: 7, color: T.textDisabled }}>{timeAgo(t.updated_at)}</span>
+                          <div className="flex items-center gap-1">
+                            {(conf < 70 || expired) && (
+                              <AlertTriangle size={7} style={{ color: T.gold }} />
                             )}
                             <button
-                              onClick={() => toggleFlag(t.target_id)}
+                              onClick={(e) => { e.stopPropagation(); toggleFlag(t.target_id); }}
                               title={isFlagged ? "Remove flag" : "Flag target"}
                               style={{ lineHeight: 1, color: isFlagged ? T.gold : T.textDisabled }}
                             >
-                              <Flag size={9} />
+                              <Flag size={7} />
                             </button>
                           </div>
                         </div>
@@ -833,7 +931,8 @@ export default function DecisionsPage() {
                   })}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}

@@ -182,7 +182,9 @@ class TestExtractAndStore:
         assert links[0].link_type == "FOUNDED_BY"
 
     @pytest.mark.asyncio
-    async def test_handles_extraction_error_gracefully(self):
+    async def test_raises_when_all_chunks_fail(self):
+        """extract_and_store raises RuntimeError when every chunk fails so callers
+        can fall back to a simpler extraction pipeline."""
         from kg.extract import extract_and_store
 
         registry = _build_test_registry()
