@@ -11,6 +11,29 @@ import { getSidc } from "@/lib/sidc-map";
 
 const MARKER_SIZE = 18;
 
+/**
+ * Apply a drop-shadow filter to the NATO symbol element to communicate
+ * combat state: amber for suppressed, salmon for retreating (RTB).
+ * Clears the filter when neither condition applies.
+ */
+function _applyCombatFilter(markerEl: HTMLElement, asset: TacticalAsset): void {
+  const inner = markerEl.firstElementChild as HTMLElement | null;
+  if (!inner) return;
+  if (asset.is_suppressed) {
+    inner.style.filter = "drop-shadow(0 0 5px rgba(255,165,0,0.95))";
+  } else if (asset.sim_status === "rtb") {
+    inner.style.filter = "drop-shadow(0 0 5px rgba(231,106,110,0.95))";
+  } else {
+    // Don't overwrite hover/selected filter — only clear combat state
+    if (
+      inner.style.filter.includes("165,0") ||   // amber
+      inner.style.filter.includes("106,110")    // salmon
+    ) {
+      inner.style.filter = "";
+    }
+  }
+}
+
 function renderNatoSymbol(asset: TacticalAsset): string {
   const sidc = getSidc(asset.sim_asset_type, asset.affiliation, asset.sim_status);
   const symbol = new ms.Symbol(sidc, {
@@ -69,11 +92,14 @@ export function useMapMarkers(
         if (existing) {
           existing.marker.setLngLat([asset.longitude, asset.latitude]);
           existing.asset = asset;
+          const existingEl = existing.marker.getElement();
           if (asset.is_ghost) {
             const age = asset.ghost_age_ticks ?? 0;
             const opacity = Math.max(0.15, 1.0 - age / 60);
-            existing.marker.getElement().style.opacity = String(opacity);
+            existingEl.style.opacity = String(opacity);
           }
+          // Update combat-state visual on the inner NATO symbol
+          _applyCombatFilter(existingEl, asset);
           continue;
         }
 
@@ -120,6 +146,9 @@ export function useMapMarkers(
         const marker = new maplibregl.Marker({ element: el, anchor: "center" })
           .setLngLat([asset.longitude, asset.latitude])
           .addTo(map!);
+
+        // Apply initial combat state filter
+        _applyCombatFilter(el, asset);
 
         const assetId = asset.asset_id;
         el.addEventListener("click", () => {

@@ -88,6 +88,7 @@ export function simAssetToTactical(sim: SimAsset): TacticalAsset {
     callsign: sim.callsign,
     sim_asset_type: sim.asset_type,
     sim_status: sim.status,
+    is_suppressed: sim.is_suppressed ?? false,
     latitude: sim.position.latitude,
     longitude: sim.position.longitude,
     timestamp: new Date().toISOString(),

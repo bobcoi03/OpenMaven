@@ -46,6 +46,8 @@ export interface TacticalAsset {
   structural_pct?: number;
   // Simulation status (active, damaged, destroyed, on_mission, etc.)
   sim_status?: string;
+  // Combat state
+  is_suppressed?: boolean;
   // Fog of war
   detection_confidence?: number;
   detected_by?: string;
