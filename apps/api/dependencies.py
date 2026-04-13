@@ -2,6 +2,7 @@
 
 import logging
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -9,6 +10,9 @@ load_dotenv(override=True)
 
 from ontology.registry import OntologyRegistry
 from store.base import BaseStore
+
+# Path to the default seed data file used by tests and the MemoryStore bootstrap.
+SEED_PATH: Path = Path(__file__).parent / "data" / "seed" / "yc-seed.json"
 
 logger = logging.getLogger(__name__)
 

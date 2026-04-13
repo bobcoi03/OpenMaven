@@ -1,6 +1,7 @@
 """SimulationManager — holds world state, runs the tick loop, processes commands."""
 
 import asyncio
+import collections
 import logging
 import random
 import uuid
@@ -11,8 +12,9 @@ from pydantic import BaseModel
 
 from detection.detection_engine import process_assets
 from detection.models import Asset as DetectionAsset, Detection, Target, TargetStage, TargetingBoard
-from detection.targeting_board import advance_target, auto_triage, create_target, set_target_stage
+from detection.targeting_board import auto_triage, create_target, set_target_stage
 from simulation.assets import AssetStatus, MovementOrder, Position, SimAsset
+from simulation.consequence_engine import ConsequenceEngine, LOW_CAPABILITY_THRESHOLD
 from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
 from simulation.detection import SensorReading, compute_detections
@@ -158,7 +160,7 @@ class SimulationManager:
         self.factions: dict[str, Faction] = {}
         self.dependencies: list[DependencyLink] = []
         self.event_queue: EventQueue = EventQueue()
-        self.event_log: list[SimEvent] = []
+        self.event_log: collections.deque[SimEvent] = collections.deque(maxlen=1000)
         self.targeting_board: TargetingBoard = TargetingBoard()
         self._rng: random.Random = random.Random()
 
@@ -174,6 +176,11 @@ class SimulationManager:
         self._task: asyncio.Task[None] | None = None
         self._broadcast_fn: Any = None  # set externally by WebSocket manager
         self._red_ai: RedAI = RedAI()
+        self._consequence_engine: ConsequenceEngine = ConsequenceEngine()
+        # (faction_id, trigger) pairs queued by sync code for async CE processing
+        self._pending_ce_triggers: list[tuple[str, str]] = []
+        # Tracks in-flight CE tasks so they can be cancelled on stop()
+        self._ce_tasks: set[asyncio.Task] = set()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -185,11 +192,14 @@ class SimulationManager:
         logger.info("Simulation started.")
 
     def stop(self) -> None:
-        """Stop the background tick loop."""
+        """Stop the background tick loop and cancel any in-flight CE tasks."""
         if self._task is None:
             return
         self._task.cancel()
         self._task = None
+        for ce_task in self._ce_tasks:
+            ce_task.cancel()
+        self._ce_tasks.clear()
         logger.info("Simulation stopped.")
 
     def set_speed(self, speed: SimSpeed) -> None:
@@ -532,6 +542,10 @@ class SimulationManager:
         if result.destroyed:
             self._handle_infrastructure_cascade(mission.target_id)
 
+        # Suppress the target: it cannot return fire for a few ticks.
+        if result.hit:
+            target.suppress(self.tick + 5)
+
         mission.status = "complete"
         mission.result = {
             "outcome": result.outcome.value,
@@ -541,6 +555,7 @@ class SimulationManager:
             "description": result.description,
             "target_status": target.status.value,
             "target_health": target.health,
+            "suppressed_until_tick": target.suppressed_until_tick,
             "target_asset_type": target.asset_type,
             "target_lat": target.position.latitude,
             "target_lon": target.position.longitude,
@@ -704,6 +719,9 @@ class SimulationManager:
                 await self._broadcast_fn({"type": "diff", "data": diff.model_dump()})
                 await self._broadcast_fn({"type": "detections", "data": detection_payload})
 
+            # Fire LLM consequence checks as a background task (non-blocking).
+            self._fire_consequence_checks(diff)
+
     def _advance_tick(self) -> StateDiff:
         """Process one simulation tick."""
         self.tick += 1
@@ -765,13 +783,30 @@ class SimulationManager:
         )
 
     def _tick_movement(self, asset: SimAsset) -> dict[str, Any] | None:
-        """Update position for a moving asset. Returns update dict or None."""
+        """Update position for a moving asset. Returns update dict or None.
+
+        Suppressed assets have their arrival extended by 1 tick per suppressed
+        tick, effectively pausing movement until suppression lifts.
+        """
         if not asset.is_alive():
             return None
         if asset.movement_order is None:
             return None
 
         order = asset.movement_order
+
+        # Suppression penalty: delay arrival while under suppression.
+        # Cap the total extra delay at 50 ticks so persistent suppression can't
+        # pin an asset in place forever.
+        if asset.is_suppressed(self.tick):
+            if order.arrive_tick - self.tick < 50:
+                order.arrive_tick += 1
+            return {
+                "asset_id": asset.asset_id,
+                "event": "suppressed_moving",
+                "position": asset.position.model_dump(),
+                "suppressed_until_tick": asset.suppressed_until_tick,
+            }
 
         if self.tick >= order.arrive_tick:
             # Arrived
@@ -796,7 +831,7 @@ class SimulationManager:
         # In transit — interpolate
         total_ticks = order.arrive_tick - order.start_tick
         elapsed = self.tick - order.start_tick
-        fraction = elapsed / total_ticks
+        fraction = elapsed / max(total_ticks, 1)
 
         lat, lon = interpolate_position(
             order.origin_lat, order.origin_lon,
@@ -853,9 +888,12 @@ class SimulationManager:
             )
 
         elif action == "update_leader":
-            faction = self.factions.get(params.get("faction_id", ""))
+            faction_id = params.get("faction_id", "")
+            faction = self.factions.get(faction_id)
             if faction:
                 faction.kill_leader(params.get("leader_id", ""))
+                # Queue a consequence evaluation — leader loss is a significant event.
+                self._pending_ce_triggers.append((faction_id, "leader_killed"))
 
         elif action == "update_morale":
             faction = self.factions.get(params.get("faction_id", ""))
@@ -865,11 +903,100 @@ class SimulationManager:
         elif action == "spawn_asset":
             asset_data = params.get("asset")
             if asset_data:
+                faction_id = asset_data.get("faction_id", "")
+                if faction_id not in self.factions:
+                    logger.warning("spawn_asset: unknown faction_id=%s", faction_id)
+                    return
                 new_asset = SimAsset(**asset_data)
                 self.add_asset(new_asset)
 
         else:
             logger.warning("Unknown mutation action: %s", action)
+
+    # ── Consequence engine helpers ─────────────────────────────────────────
+
+    def _apply_mutation_from_consequence(self, action: str, params: dict[str, Any]) -> None:
+        """Apply a single mutation issued by the LLM consequence engine.
+
+        Identical in shape to ``_apply_mutation`` but restricted to the safe
+        subset of actions the LLM is allowed to issue, with existence checks
+        before every write.
+        """
+        if action == "move_asset":
+            asset_id = params.get("asset_id", "")
+            lat = params.get("latitude")
+            lon = params.get("longitude")
+            if asset_id and lat is not None and lon is not None:
+                try:
+                    self.command_move(asset_id, float(lat), float(lon))
+                except (ValueError, TypeError) as exc:
+                    logger.warning("ConsequenceEngine: move_asset bad coords: %s", exc)
+
+        elif action == "update_morale":
+            faction_id = params.get("faction_id", "")
+            try:
+                severity = float(params.get("severity", 0.1))
+            except (ValueError, TypeError):
+                severity = 0.1
+            faction = self.factions.get(faction_id)
+            if faction:
+                faction.apply_morale_hit(severity)
+
+        elif action == "update_leader":
+            faction_id = params.get("faction_id", "")
+            leader_id = params.get("leader_id", "")
+            faction = self.factions.get(faction_id)
+            if faction and leader_id:
+                faction.kill_leader(leader_id)
+
+        else:
+            logger.warning("ConsequenceEngine: unsupported action=%s", action)
+
+    def _fire_consequence_checks(self, diff: "StateDiff") -> None:
+        """Inspect a completed tick diff and schedule consequence evaluations.
+
+        Called from the async tick loop so asyncio.create_task is safe.
+        Triggers for a red faction:
+          - Any red AI alert fired this tick (engagement happened)
+          - A blue strike mission destroyed a red asset this tick
+          - Red faction capability is below the low-capability threshold
+          - A faction leader was killed this tick (via _pending_ce_triggers)
+        """
+        # faction_id → trigger label (last trigger wins for the label, but all fire)
+        triggered: dict[str, str] = {}
+
+        # Trigger: red AI fired (red factions under pressure / engaging)
+        if diff.alerts:
+            for faction_id, faction in self.factions.items():
+                if faction.side == "red":
+                    triggered[faction_id] = "engagement"
+
+        # Trigger: a blue strike destroyed a red asset
+        for mu in diff.mission_updates:
+            if mu.status == "complete" and mu.result and mu.result.get("destroyed"):
+                asset = self.assets.get(mu.target_id)
+                if asset and asset.faction_id != "blue":
+                    triggered[asset.faction_id] = "asset_destroyed"
+
+        # Trigger: red faction capability critically low
+        for faction_id, faction in self.factions.items():
+            if faction.side == "red" and faction.capability < LOW_CAPABILITY_THRESHOLD:
+                triggered.setdefault(faction_id, "low_capability")
+
+        # Trigger: leader killed (queued synchronously by _apply_mutation)
+        for faction_id, trigger_label in self._pending_ce_triggers:
+            triggered[faction_id] = trigger_label
+        self._pending_ce_triggers.clear()
+
+        for faction_id, trigger_label in triggered.items():
+            if self._consequence_engine.is_ready(faction_id, self.tick):
+                task = asyncio.create_task(
+                    self._consequence_engine.maybe_evaluate(
+                        faction_id, trigger_label, self
+                    )
+                )
+                self._ce_tasks.add(task)
+                task.add_done_callback(self._ce_tasks.discard)
 
     # ── Internal helpers ──────────────────────────────────────────────────
 

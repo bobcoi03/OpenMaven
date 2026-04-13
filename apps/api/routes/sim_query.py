@@ -746,7 +746,7 @@ def handle_asset_details(asset_id: str) -> str:
 def handle_recent_events(count: int = 10) -> str:
     """Most recent events from the event log."""
     sim = _get_sim()
-    events = sim.event_log[-count:]
+    events = list(sim.event_log)[-count:]
     return json.dumps(
         [e.model_dump() for e in reversed(events)],
         default=str,
