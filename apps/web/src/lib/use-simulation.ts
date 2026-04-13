@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNotifications } from "@/lib/notification-context";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -110,6 +111,21 @@ export interface StrikeLogEntry {
   tick: number;
 }
 
+export interface SigintIntercept {
+  intercept_id: string;
+  tick: number;
+  emitter_asset_id: string;
+  emitter_callsign: string;
+  intercepted_by_id: string;
+  intercepted_by_callsign: string;
+  lat: number;
+  lon: number;
+  frequency_band: string;
+  signal_type: string;
+  confidence: number;
+  threat_level: "HIGH" | "MED" | "LOW";
+}
+
 export interface StateDiff {
   tick: number;
   asset_updates: Array<Record<string, unknown>>;
@@ -118,6 +134,7 @@ export interface StateDiff {
   detections: DetectionEntry[];
   ghosts: GhostEntry[];
   mission_updates: MissionUpdate[];
+  sigint_intercepts?: SigintIntercept[];
 }
 export interface DetectionRecord {
   detection_id: string;
@@ -165,6 +182,8 @@ interface UseSimulationReturn {
   activeMissions: Record<string, MissionUpdate>;
   /** Completed/aborted strike log entries */
   strikeLog: StrikeLogEntry[];
+  /** Live SIGINT intercepts — newest first, capped at 50 */
+  sigintIntercepts: SigintIntercept[];
   /** Set simulation speed (0=pause, 1, 2, 5, 10) */
   setSpeed: (speed: number) => void;
   /** Execute a strike */
@@ -200,11 +219,18 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
   const [ghosts, setGhosts] = useState<Record<string, GhostEntry>>({});
   const [activeMissions, setActiveMissions] = useState<Record<string, MissionUpdate>>({});
   const [strikeLog, setStrikeLog] = useState<StrikeLogEntry[]>([]);
+  const [sigintIntercepts, setSigintIntercepts] = useState<SigintIntercept[]>([]);
+
+  const { addNotification } = useNotifications();
 
   const wsRef = useRef<WebSocket | null>(null);
-  // Keep a ref to assets for mission update callbacks
+  // Keep refs to assets/tick for use inside WS message closures
   const assetsRef = useRef(assets);
   assetsRef.current = assets;
+  const tickRef = useRef(tick);
+  tickRef.current = tick;
+  const detectionsRef = useRef(detections);
+  detectionsRef.current = detections;
 
   // ── Send helper ─────────────────────────────────────────────────────
 
@@ -375,6 +401,19 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
           dMap[d.target_id] = d;
         }
         setDetections(dMap);
+        // Emit notifications only for contacts not present in the previous tick
+        const prevDetections = detectionsRef.current;
+        for (const d of diff.detections) {
+          if (!prevDetections[d.target_id]) {
+            addNotification({
+              severity: "blue",
+              title: "New contact",
+              body: `${d.lat.toFixed(2)}°N, ${d.lon.toFixed(2)}°E — confidence ${Math.round(d.confidence * 100)}%`,
+              assetLon: d.lon,
+              assetLat: d.lat,
+            });
+          }
+        }
       }
       if (diff.ghosts) {
         const gMap: Record<string, GhostEntry> = {};
@@ -417,6 +456,30 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
             })),
             ...prev,
           ]);
+          // Emit notifications for mission outcomes
+          for (const mu of completed) {
+            const target = currentAssets[mu.target_id];
+            if (mu.status === "complete") {
+              addNotification({
+                severity: "green",
+                title: "Target neutralized",
+                body: target ? `${target.callsign} — ${target.asset_type}` : mu.target_id,
+                assetId: mu.target_id,
+                assetLon: target?.position.longitude,
+                assetLat: target?.position.latitude,
+              });
+            } else if (mu.status === "aborted") {
+              const shooter = currentAssets[mu.shooter_id];
+              const abortTarget = currentAssets[mu.target_id];
+              addNotification({
+                severity: "amber",
+                title: "Mission aborted",
+                body: shooter && abortTarget
+                  ? `${shooter.callsign} → ${abortTarget.callsign}`
+                  : `Mission ${mu.mission_id.slice(0, 8)}`,
+              });
+            }
+          }
         }
 
         // Update target asset health/status from mission results
@@ -437,6 +500,26 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
           }
           return next;
         });
+      }
+
+      // SIGINT intercepts — prepend new, cap ring-buffer to 50
+      if (diff.sigint_intercepts && diff.sigint_intercepts.length > 0) {
+        setSigintIntercepts((prev) => {
+          const next = [...diff.sigint_intercepts!, ...prev];
+          return next.length > 50 ? next.slice(0, 50) : next;
+        });
+        // Fire amber notification for HIGH confidence intercepts
+        for (const intercept of diff.sigint_intercepts) {
+          if (intercept.threat_level === "HIGH") {
+            addNotification({
+              severity: "amber",
+              title: "SIGINT — High confidence intercept",
+              body: `${intercept.emitter_callsign} · ${intercept.frequency_band} · ${Math.round(intercept.confidence * 100)}%`,
+              assetLon: intercept.lon,
+              assetLat: intercept.lat,
+            });
+          }
+        }
       }
       return;
     }
@@ -479,17 +562,34 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
     if (msg.type === "strike_mission_result") {
       const data = msg.data ?? msg;
       if (data.mission_id && !data.error) {
+        const shooterId = data.shooter_id as string;
+        const targetId  = data.target_id  as string;
         setActiveMissions((prev) => ({
           ...prev,
           [data.mission_id as string]: {
             mission_id: data.mission_id as string,
-            shooter_id: data.shooter_id as string,
+            shooter_id: shooterId,
             weapon_id: data.weapon_id as string,
-            target_id: data.target_id as string,
+            target_id: targetId,
             status: "en_route" as const,
             result: null,
           },
         }));
+        // Log launch event so the Event Timeline shows it immediately
+        const currentAssets = assetsRef.current;
+        setStrikeLog((prev) => [
+          {
+            mission_id: data.mission_id as string,
+            shooter_callsign: currentAssets[shooterId]?.callsign ?? shooterId,
+            weapon_id: data.weapon_id as string,
+            target_callsign: currentAssets[targetId]?.callsign ?? targetId,
+            target_id: targetId,
+            status: "en_route",
+            result: null,
+            tick: tickRef.current,
+          },
+          ...prev,
+        ]);
       }
       return;
     }
@@ -505,7 +605,7 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
       setBoardState(boardState);
       return;
     }
-  }, []);
+  }, [addNotification]);
 
   // ── Connection lifecycle ────────────────────────────────────────────
 
@@ -538,6 +638,7 @@ export function useSimulation(options: UseSimulationOptions = {}): UseSimulation
     ghosts,
     activeMissions,
     strikeLog,
+    sigintIntercepts,
     setSpeed,
     strike,
     strikeMission,

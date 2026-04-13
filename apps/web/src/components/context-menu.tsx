@@ -11,7 +11,7 @@
 
 import { useEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Crosshair, Move, Zap, Info, Camera } from "lucide-react";
+import { Crosshair, Move, Zap, Info, Camera, Route } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +28,7 @@ interface ContextMenuProps {
   selectedAssetId: string | null;
   onAction: (action: string, payload?: Record<string, unknown>) => void;
   onClose: () => void;
+  onStartWaypointMode?: (assetId: string) => void;
 }
 
 // ── Menu Item ────────────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ function MenuItem({
 
 // ── Context Menu ─────────────────────────────────────────────────────────────
 
-export function ContextMenu({ state, selectedAssetId, onAction, onClose }: ContextMenuProps) {
+export function ContextMenu({ state, selectedAssetId, onAction, onClose, onStartWaypointMode }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click or Escape
@@ -112,6 +113,16 @@ export function ContextMenu({ state, selectedAssetId, onAction, onClose }: Conte
               icon={Move}
               label="Move to..."
               onClick={() => onAction("move", { assetId: asset.asset_id })}
+            />
+          )}
+          {isFriendly && !asset.is_ghost && onStartWaypointMode && (
+            <MenuItem
+              icon={Route}
+              label="Set Patrol Route"
+              onClick={() => {
+                onStartWaypointMode(asset.asset_id);
+                onClose();
+              }}
             />
           )}
           {!isFriendly && !asset.is_ghost && (

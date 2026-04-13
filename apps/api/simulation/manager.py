@@ -19,6 +19,7 @@ from simulation.events import EventQueue, EventType, Mutation, SimEvent
 from simulation.faction import Faction
 from simulation.detection import SensorReading, compute_detections
 from simulation.red_ai import RedAI
+from simulation.sigint import SigintIntercept, compute_sigint_intercepts
 from simulation.rules import (
     DependencyLink,
     bearing_degrees,
@@ -121,6 +122,7 @@ class StateDiff(BaseModel):
     detections: list[DetectionEntry] = []
     ghosts: list[GhostEntry] = []
     mission_updates: list[MissionUpdate] = []
+    sigint_intercepts: list[SigintIntercept] = []
 
 
 # ── Manager ──────────────────────────────────────────────────────────────────
@@ -334,6 +336,13 @@ class SimulationManager:
             faction_id=target.faction_id,
         )
         self.event_log.append(event)
+
+        # Queue immediate counter-fire from the struck faction.
+        if result.hit:
+            retaliation = self._red_ai.retaliate_on_strike(
+                self, target.faction_id, attacker_id=None
+            )
+            self._pending_retaliation.append(retaliation)
 
         return {
             "result": result.model_dump(),
@@ -749,6 +758,13 @@ class SimulationManager:
         asset_updates.extend(red_result.asset_updates)
         alerts.extend(red_result.alerts)
 
+        # Flush retaliations queued this tick (from events resolved in step 2)
+        # or carried over from commands issued between ticks (e.g. HTTP strikes).
+        for ret in self._pending_retaliation:
+            asset_updates.extend(ret.asset_updates)
+            alerts.extend(ret.alerts)
+        self._pending_retaliation.clear()
+
         # 4. Fog of war — run detection
         detection_entries, ghost_entries = self._tick_detections()
 
@@ -772,6 +788,13 @@ class SimulationManager:
                 status=m.status,
             ))
 
+        sigint_intercepts = compute_sigint_intercepts(
+            assets=self.assets,
+            factions=self.factions,
+            rng=self._rng,
+            tick=self.tick,
+        )
+
         return StateDiff(
             tick=self.tick,
             asset_updates=asset_updates,
@@ -780,6 +803,7 @@ class SimulationManager:
             detections=detection_entries,
             ghosts=ghost_entries,
             mission_updates=mission_updates,
+            sigint_intercepts=sigint_intercepts,
         )
 
     def _tick_movement(self, asset: SimAsset) -> dict[str, Any] | None:

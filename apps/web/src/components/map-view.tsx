@@ -10,6 +10,8 @@
 import dynamic from "next/dynamic";
 import type { TacticalAsset, AssetClass } from "@/lib/tactical-mock";
 import type { MapStyleId } from "./map-view-inner";
+import type { Waypoint } from "@/lib/use-map-waypoint-mode";
+import type { SigintIntercept } from "@/lib/use-simulation";
 
 export interface MapViewProps {
   assets: TacticalAsset[];
@@ -44,7 +46,13 @@ export interface MapViewProps {
   movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
   /** Asset ID to lock the camera and targeting reticle onto. */
   lockedAssetId?: string | null;
+  showHeatmap?: boolean;
+  showZoneControl?: boolean;
   flyTo?: { lat: number; lng: number; zoom?: number } | null;
+  waypointAssetId?: string | null;
+  waypoints?: Waypoint[];
+  sigintIntercepts?: SigintIntercept[];
+  showSigintPulse?: boolean;
 }
 
 const MapViewInner = dynamic(

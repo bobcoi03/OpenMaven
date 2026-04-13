@@ -206,6 +206,110 @@ class RedAI:
         # asset_id → tick on which this asset last retreated (avoid spamming RTB orders)
         self._retreat_issued: dict[str, int] = {}
 
+    def retaliate_on_strike(
+        self,
+        mgr: "SimulationManager",
+        struck_faction_id: str,
+        attacker_id: str | None = None,
+    ) -> RedAIResult:
+        """Immediate counter-fire triggered when a red asset is struck by blue.
+
+        Unlike ``run_tick``, this bypasses the doctrine cooldown and
+        retaliation_threshold so that any hit faction fires back right away,
+        as long as it has capable shooters that can detect a blue target.
+
+        Args:
+            mgr: The live SimulationManager holding all world state.
+            struck_faction_id: ID of the red faction that was just hit.
+            attacker_id: Asset ID of the blue shooter, if known.  When the
+                attacker is detectable, the retaliating faction will prioritise
+                it as the return-fire target.
+
+        Returns:
+            RedAIResult with alerts and asset_updates for this retaliation.
+        """
+        result = RedAIResult()
+
+        faction = mgr.factions.get(struck_faction_id)
+        if faction is None or faction.side != "red":
+            return result
+
+        # Suppress if critically low on morale or ammo.
+        if faction.morale < 0.1 or faction.resources.ammo < 0.05:
+            return result
+
+        shooters = self._get_shooters(struck_faction_id, mgr)
+        if not shooters:
+            return result
+
+        detected_blue = self._detect_blue(shooters, mgr)
+        if not detected_blue:
+            return result
+
+        # Prefer the specific attacker if it is among the detected assets.
+        target: SimAsset | None = None
+        if attacker_id is not None:
+            for asset in detected_blue:
+                if asset.asset_id == attacker_id:
+                    target = asset
+                    break
+
+        if target is None:
+            target = self._select_target(faction.doctrine, detected_blue)
+        if target is None:
+            return result
+
+        shooter = self._select_shooter(shooters, target)
+        if shooter is None:
+            return result
+
+        weapon_id = ASSET_WEAPONS[shooter.asset_type]
+        strike_result = resolve_strike_by_names(weapon_id, target.asset_type)
+        if strike_result is None:
+            logger.warning(
+                "RedAI retaliation: no strike result for weapon=%s target_type=%s",
+                weapon_id,
+                target.asset_type,
+            )
+            return result
+
+        target.apply_damage(strike_result.damage_percent)
+        mgr._update_faction_capability(target.faction_id)
+        if strike_result.destroyed:
+            mgr._handle_infrastructure_cascade(target.asset_id)
+
+        mgr.event_queue.create_and_schedule(
+            event_type=EventType.RETALIATION,
+            description=(
+                f"[{faction.name}] {shooter.callsign} returned fire on "
+                f"{target.callsign}: {strike_result.description}"
+            ),
+            scheduled_tick=mgr.tick,
+            faction_id=struck_faction_id,
+        )
+
+        faction.consume_resources(ammo=0.05)
+
+        alert = (
+            f"RETALIATION [{faction.name}] {shooter.callsign} → "
+            f"{target.callsign} | {strike_result.description}"
+        )
+        result.alerts.append(alert)
+        logger.info("RedAI retaliation tick=%d: %s", mgr.tick, alert)
+
+        result.asset_updates.append({
+            "asset_id": target.asset_id,
+            "event": "retaliation",
+            "health": target.health,
+            "status": target.status.value,
+            "attacker_callsign": shooter.callsign,
+            "attacker_faction": faction.name,
+            "weapon": weapon_id,
+            "outcome": strike_result.outcome.value,
+        })
+
+        return result
+
     def run_tick(self, mgr: "SimulationManager") -> RedAIResult:
         """Evaluate and execute red-side behaviours for this tick.
 

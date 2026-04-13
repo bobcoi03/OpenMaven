@@ -199,8 +199,9 @@ export async function querySimulationStream(
   question: string,
   messages: QueryChatMessage[],
   onEvent: (event: QueryStreamEvent) => void,
+  model?: string,
 ): Promise<void> {
-  return _streamQuery("/api/sim-query/stream", question, messages, onEvent);
+  return _streamQuery("/api/sim-query/stream", question, messages, onEvent, model);
 }
 
 export async function queryKnowledgeGraphStream(
@@ -216,6 +217,7 @@ async function _streamQuery(
   question: string,
   messages: QueryChatMessage[],
   onEvent: (event: QueryStreamEvent) => void,
+  model?: string,
 ): Promise<void> {
   const response = await fetch(url, {
     method: "POST",
@@ -223,7 +225,7 @@ async function _streamQuery(
       "Content-Type": "application/json",
       "Accept": "text/event-stream",
     },
-    body: JSON.stringify({ question, messages }),
+    body: JSON.stringify({ question, messages, ...(model ? { model } : {}) }),
   });
   if (!response.ok || !response.body) {
     const detail = await response.text();

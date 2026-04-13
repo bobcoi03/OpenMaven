@@ -18,16 +18,20 @@ import { StrikeLogPanel } from "@/components/strike-log-panel";
 import { useMapLayers } from "@/lib/map-layer-context";
 import { useSimulation, type MissionUpdate } from "@/lib/use-simulation";
 import { useMapMove } from "@/lib/use-map-move";
+import { useMapWaypointMode } from "@/lib/use-map-waypoint-mode";
+import { MiniMapPanel } from "@/components/mini-map-panel";
 import { useMapContextMenu } from "@/lib/use-map-context-menu";
 import { useSensorRanges } from "@/lib/use-sensor-ranges";
 import { simAssetsToTactical } from "@/lib/sim-to-tactical";
 import { findBestPairing, findAllPairings, refreshPairing, type PairingSelection } from "@/lib/strike-pairing";
+import { EventTimelineDrawer } from "@/components/event-timeline-drawer";
+import { MissionQueuePanel } from "@/components/mission-queue-panel";
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function MapPage() {
   const router = useRouter();
-  const { visibleLayers, selectedAsset, setSelectedAsset } = useMapLayers();
+  const { visibleLayers, selectedAsset, setSelectedAsset, showHeatmap, showZoneControl } = useMapLayers();
   const searchParams = useSearchParams();
   const [mapStyle, setMapStyle] = useState<MapStyleId>("dark");
 
@@ -39,6 +43,7 @@ export default function MapPage() {
     return { lat, lng, zoom: 12 };
   }, [searchParams]);
   const [showSensorRanges, setShowSensorRanges] = useState(true);
+  const [showSigintPulse, setShowSigintPulse] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef<HTMLDivElement>(null);
   const [lockedAssetId, setLockedAssetId] = useState<string | null>(null);
@@ -114,6 +119,24 @@ export default function MapPage() {
   const [pairingSelection, setPairingSelection] = useState<PairingSelection | null>(null);
   const [noShooterMsg, setNoShooterMsg] = useState(false);
   const [missionInitialDistKm, setMissionInitialDistKm] = useState(0);
+  // Per-mission initial distances for MissionQueuePanel progress bars
+  const missionInitialDistsRef = useRef<Record<string, number>>({});
+
+  // Track initial distances when missions are first seen; clean up on completion
+  useEffect(() => {
+    for (const [id, mission] of Object.entries(sim.activeMissions)) {
+      if (missionInitialDistsRef.current[id] !== undefined) continue;
+      const shooter = sim.assets[mission.shooter_id];
+      const target = sim.assets[mission.target_id];
+      if (!shooter || !target) continue;
+      const dx = (shooter.position.longitude - target.position.longitude) * 111 * Math.cos((target.position.latitude * Math.PI) / 180);
+      const dy = (shooter.position.latitude - target.position.latitude) * 111;
+      missionInitialDistsRef.current[id] = Math.hypot(dx, dy);
+    }
+    for (const id of Object.keys(missionInitialDistsRef.current)) {
+      if (!sim.activeMissions[id]) delete missionInitialDistsRef.current[id];
+    }
+  }, [sim.activeMissions, sim.assets]);
 
   // Recompute live telemetry from current asset positions every tick
   const activePairing = useMemo(() => {
@@ -282,6 +305,8 @@ export default function MapPage() {
     onSelectAsset: setSelectedAsset,
   });
 
+  const waypoint = useMapWaypointMode({ assets: sim.assets, moveAsset: sim.moveAsset });
+
   const ctx = useMapContextMenu({
     assets: sim.assets,
     onSelectAsset: setSelectedAsset,
@@ -333,7 +358,7 @@ export default function MapPage() {
           selectedId={selectedId}
           mapStyle={mapStyle}
           onContextMenu={ctx.handleContextMenu}
-          onMapClick={move.moveMode ? move.handleMapClick : undefined}
+          onMapClick={waypoint.waypointAssetId ? waypoint.handleMapClick : move.moveMode ? move.handleMapClick : undefined}
           movePath={move.movePath}
           onMovePathDrag={move.handleDrag}
           sensorRanges={sensorRanges}
@@ -343,8 +368,14 @@ export default function MapPage() {
           strikeLines={strikeLines}
           plannedLines={plannedLines}
           movementLines={movementLines}
+          showHeatmap={showHeatmap}
+          showZoneControl={showZoneControl}
           lockedAssetId={lockedAssetId}
           flyTo={flyTo}
+          waypointAssetId={waypoint.waypointAssetId}
+          waypoints={waypoint.waypoints}
+          sigintIntercepts={sim.sigintIntercepts}
+          showSigintPulse={showSigintPulse}
         />
 
         {/* Move-mode indicator */}
@@ -385,6 +416,39 @@ export default function MapPage() {
           </div>
         )}
 
+        {/* Waypoint mode indicator */}
+        {waypoint.waypointAssetId && (
+          <div
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded-sm text-[10px] font-semibold"
+            style={{
+              background: "rgba(45,114,210,0.15)",
+              border: "1px solid rgba(45,114,210,0.4)",
+              color: "var(--om-blue-light)",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <span>WAYPOINT MODE</span>
+            <span className="opacity-50">·</span>
+            <span>{sim.assets[waypoint.waypointAssetId]?.callsign ?? waypoint.waypointAssetId}</span>
+            <span className="opacity-50">·</span>
+            <span>{waypoint.waypoints.length} / 5 points</span>
+            {waypoint.waypoints.length > 0 && (
+              <button
+                onClick={waypoint.confirm}
+                className="px-2 py-0.5 bg-[var(--om-blue)]/20 border border-[var(--om-blue)]/40 rounded-sm hover:bg-[var(--om-blue)]/30 cursor-pointer transition-colors"
+              >
+                Confirm
+              </button>
+            )}
+            <button
+              onClick={waypoint.cancel}
+              className="text-[var(--om-text-secondary)] hover:text-[var(--om-text-primary)] cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
         {/* Target lock badge — shown when a target is locked */}
         {lockedAssetId && (() => {
           const locked = sim.assets[lockedAssetId];
@@ -417,7 +481,8 @@ export default function MapPage() {
         {/* Lock Target button — shown when an asset is selected and not yet locked */}
         {selectedId && selectedId !== lockedAssetId && (
           <div
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30"
+            className="absolute left-1/2 -translate-x-1/2 z-30"
+            style={{ bottom: 32 }}
           >
             <button
               onClick={() => setLockedAssetId(selectedId)}
@@ -466,6 +531,7 @@ export default function MapPage() {
 
         {/* Top-right HUD: map style toggle + sensor toggle + help */}
         <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+          <MiniMapPanel assets={visibleAssets} visibleLayers={visibleLayers} />
           {/* Sensor range toggle */}
           <button
             onClick={() => setShowSensorRanges((v) => !v)}
@@ -481,6 +547,22 @@ export default function MapPage() {
             }}
           >
             Sensors
+          </button>
+
+          <button
+            onClick={() => setShowSigintPulse((v) => !v)}
+            className={`px-2.5 py-1 rounded-sm text-[9px] font-semibold cursor-pointer transition-colors ${
+              showSigintPulse
+                ? "text-[var(--om-red-light)]"
+                : "text-[var(--om-text-muted)]"
+            }`}
+            style={{
+              background: "rgba(30,34,41,0.85)",
+              border: `1px solid ${showSigintPulse ? "rgba(231,106,110,0.4)" : "var(--om-border)"}`,
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            SIGINT
           </button>
 
           <div
@@ -627,8 +709,26 @@ export default function MapPage() {
             selectedAssetId={selectedId}
             onAction={ctx.handleAction}
             onClose={ctx.close}
+            onStartWaypointMode={waypoint.startWaypointMode}
           />
         )}
+
+        <MissionQueuePanel
+          activeMissions={sim.activeMissions}
+          assets={sim.assets}
+          currentTick={sim.tick}
+          initialDistances={missionInitialDistsRef.current}
+          onAbort={sim.abortMission}
+        />
+
+        <EventTimelineDrawer
+          strikeLog={sim.strikeLog}
+          currentTick={sim.tick}
+          onFocusAsset={(assetId) => {
+            const asset = sim.assets[assetId];
+            if (asset) setSelectedAsset(asset);
+          }}
+        />
       </div>
     </div>
   );

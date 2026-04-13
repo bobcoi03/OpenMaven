@@ -27,6 +27,7 @@ Thumbs.db
 
 # Claude Code
 .claude/
+.superpowers/
 
 # Logs
 *.log
@@ -41,3 +42,4 @@ neo4j_data/
 htmlcov/
 .coverage
 .worktrees/
+.gstack/

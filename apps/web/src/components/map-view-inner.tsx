@@ -9,7 +9,7 @@
  * Must be loaded via next/dynamic with ssr:false — maplibre-gl is browser-only.
  */
 
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import type { TacticalAsset, AssetClass } from "@/lib/tactical-mock";
 import {
   useMapInit,
@@ -18,9 +18,16 @@ import {
   useMapLines,
   useMapSensorCircles,
   useMapTargetLock,
+  useMapHeatmap,
+  useMapZoneControl,
+  useMapWaypoints,
+  useMapSigintPulse,
   MAP_STYLES,
   type MapStyleId,
 } from "@/lib/map";
+import type { Waypoint } from "@/lib/use-map-waypoint-mode";
+import type { SigintIntercept } from "@/lib/use-simulation";
+import { useMapLayers } from "@/lib/map-layer-context";
 
 // Re-export for consumers
 export { MAP_STYLES, type MapStyleId };
@@ -52,7 +59,13 @@ interface TacticalMapProps {
   plannedLines?: Array<{ from: [number, number]; to: [number, number] }> | null;
   movementLines?: Array<{ from: [number, number]; to: [number, number] }>;
   lockedAssetId?: string | null;
+  showHeatmap?: boolean;
+  showZoneControl?: boolean;
   flyTo?: { lat: number; lng: number; zoom?: number } | null;
+  waypointAssetId?: string | null;
+  waypoints?: Waypoint[];
+  sigintIntercepts?: SigintIntercept[];
+  showSigintPulse?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -76,7 +89,13 @@ export function MapViewInner({
   plannedLines,
   movementLines,
   lockedAssetId,
+  showHeatmap = false,
+  showZoneControl = false,
   flyTo,
+  waypointAssetId = null,
+  waypoints = [],
+  sigintIntercepts = [],
+  showSigintPulse = true,
 }: TacticalMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +107,17 @@ export function MapViewInner({
     onClick: onMapClick,
     flyTo,
   });
+
+  const { focusCoords, setFocusCoords } = useMapLayers();
+
+  useEffect(() => {
+    if (!focusCoords) return;
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo({ center: [focusCoords.lng, focusCoords.lat], zoom: 12, duration: 1000 });
+    // Clear after use so the same coords can trigger again on the next click
+    setFocusCoords(null);
+  }, [focusCoords]);
 
   const markersRef = useMapMarkers(mapRef, {
     assets,
@@ -122,6 +152,15 @@ export function MapViewInner({
   useMapTargetLock(mapRef, containerRef, {
     lockedAssetId,
     assets,
+  });
+
+  useMapHeatmap(mapRef, { assets, visible: showHeatmap });
+  useMapZoneControl(mapRef, { assets, visible: showZoneControl });
+  useMapWaypoints(mapRef, { waypointAssetId, waypoints, assets });
+
+  useMapSigintPulse(mapRef, containerRef, {
+    sigintIntercepts,
+    showSigintPulse,
   });
 
   return (
