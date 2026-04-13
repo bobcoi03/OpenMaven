@@ -1355,13 +1355,18 @@ def _run_agent_stream(messages: list[dict], client, model: str = MODEL) -> Gener
         step_num = step + 1
         yield {"type": "status", "step": step_num, "message": f"Reasoning step {step_num}..."}
 
+        _REASONING_MODELS = ("o1", "o3", "o4")
+        extra: dict = {}
+        if any(model.startswith(p) for p in _REASONING_MODELS):
+            extra["extra_body"] = {"reasoning": {"effort": "high"}}
+
         stream = client.chat.completions.create(
             model=model,
             messages=messages,
             tools=TOOLS,
             tool_choice="auto",
             stream=True,
-            extra_body={"reasoning": {"effort": "high"}},
+            **extra,
         )
 
         # Accumulate streamed response
