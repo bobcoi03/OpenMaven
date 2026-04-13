@@ -422,7 +422,8 @@ class RedAI:
         # Count blue forces within detection radius of shooter
         local_blue = sum(
             1 for b in detected_blue
-            if haversine_km(
+            if b.is_alive()
+            and haversine_km(
                 shooter.position.latitude, shooter.position.longitude,
                 b.position.latitude, b.position.longitude,
             ) <= REINFORCE_DETECT_KM
@@ -501,8 +502,10 @@ class RedAI:
         """Return a damage multiplier (< 1.0) if target is sheltering near a structure.
 
         Structures within COVER_RADIUS_KM grant 20–40% damage reduction depending
-        on structure hardness category.
+        on structure hardness category.  The best (lowest) multiplier from all
+        in-radius structures is returned so stacked cover is honoured correctly.
         """
+        best_mult: float = 1.0
         for structure in mgr.assets.values():
             if not structure.is_alive():
                 continue
@@ -518,11 +521,11 @@ class RedAI:
             if dist <= COVER_RADIUS_KM:
                 # Reinforced structures provide better cover than light ones
                 cat = CATEGORY_MAP.get(structure.asset_type, "")
-                if cat in ("reinforced_structure", "command_node"):
-                    return 0.60   # 40% reduction
-                return 0.80       # 20% reduction
+                mult = 0.60 if cat in ("reinforced_structure", "command_node") else 0.80
+                if mult < best_mult:
+                    best_mult = mult
 
-        return 1.0  # no cover
+        return best_mult
 
     # ── Private helpers ───────────────────────────────────────────────────────
 

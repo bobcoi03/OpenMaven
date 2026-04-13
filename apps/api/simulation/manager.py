@@ -1,6 +1,7 @@
 """SimulationManager — holds world state, runs the tick loop, processes commands."""
 
 import asyncio
+import collections
 import logging
 import random
 import uuid
@@ -159,7 +160,7 @@ class SimulationManager:
         self.factions: dict[str, Faction] = {}
         self.dependencies: list[DependencyLink] = []
         self.event_queue: EventQueue = EventQueue()
-        self.event_log: list[SimEvent] = []
+        self.event_log: collections.deque[SimEvent] = collections.deque(maxlen=1000)
         self.targeting_board: TargetingBoard = TargetingBoard()
         self._rng: random.Random = random.Random()
 
@@ -178,6 +179,8 @@ class SimulationManager:
         self._consequence_engine: ConsequenceEngine = ConsequenceEngine()
         # (faction_id, trigger) pairs queued by sync code for async CE processing
         self._pending_ce_triggers: list[tuple[str, str]] = []
+        # Tracks in-flight CE tasks so they can be cancelled on stop()
+        self._ce_tasks: set[asyncio.Task] = set()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -189,11 +192,14 @@ class SimulationManager:
         logger.info("Simulation started.")
 
     def stop(self) -> None:
-        """Stop the background tick loop."""
+        """Stop the background tick loop and cancel any in-flight CE tasks."""
         if self._task is None:
             return
         self._task.cancel()
         self._task = None
+        for ce_task in self._ce_tasks:
+            ce_task.cancel()
+        self._ce_tasks.clear()
         logger.info("Simulation stopped.")
 
     def set_speed(self, speed: SimSpeed) -> None:
@@ -790,8 +796,11 @@ class SimulationManager:
         order = asset.movement_order
 
         # Suppression penalty: delay arrival while under suppression.
+        # Cap the total extra delay at 50 ticks so persistent suppression can't
+        # pin an asset in place forever.
         if asset.is_suppressed(self.tick):
-            order.arrive_tick += 1
+            if order.arrive_tick - self.tick < 50:
+                order.arrive_tick += 1
             return {
                 "asset_id": asset.asset_id,
                 "event": "suppressed_moving",
@@ -822,7 +831,7 @@ class SimulationManager:
         # In transit — interpolate
         total_ticks = order.arrive_tick - order.start_tick
         elapsed = self.tick - order.start_tick
-        fraction = elapsed / total_ticks
+        fraction = elapsed / max(total_ticks, 1)
 
         lat, lon = interpolate_position(
             order.origin_lat, order.origin_lon,
@@ -894,6 +903,10 @@ class SimulationManager:
         elif action == "spawn_asset":
             asset_data = params.get("asset")
             if asset_data:
+                faction_id = asset_data.get("faction_id", "")
+                if faction_id not in self.factions:
+                    logger.warning("spawn_asset: unknown faction_id=%s", faction_id)
+                    return
                 new_asset = SimAsset(**asset_data)
                 self.add_asset(new_asset)
 
@@ -977,11 +990,13 @@ class SimulationManager:
 
         for faction_id, trigger_label in triggered.items():
             if self._consequence_engine.is_ready(faction_id, self.tick):
-                asyncio.create_task(
+                task = asyncio.create_task(
                     self._consequence_engine.maybe_evaluate(
                         faction_id, trigger_label, self
                     )
                 )
+                self._ce_tasks.add(task)
+                task.add_done_callback(self._ce_tasks.discard)
 
     # ── Internal helpers ──────────────────────────────────────────────────
 
